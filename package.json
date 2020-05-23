@@ -1,0 +1,30 @@
+{
+  "name": "evm-cache",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "start-dev": "nodemon index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BlockadeLabs/evm-cache.git"
+  },
+  "author": "Blockade Games Inc",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/BlockadeLabs/evm-cache/issues"
+  },
+  "homepage": "https://github.com/BlockadeLabs/evm-cache#readme",
+  "dependencies": {
+    "dotenv": "^8.2.0",
+    "evm-chain-monitor": "git+https://github.com/BlockadeLabs/evm-chain-monitor.git",
+    "loglevel": "^1.6.8",
+    "pg": "^8.2.1"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.4"
+  }
+}
