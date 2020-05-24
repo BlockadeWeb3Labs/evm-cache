@@ -17,9 +17,8 @@ CREATE TABLE contract (
 	"contract_id"          BIGSERIAL PRIMARY KEY,
 	"blockchain_id"        BIGINT REFERENCES "blockchain" (blockchain_id) NOT NULL,
 	"address"              BYTEA NOT NULL UNIQUE,
-	"created_block"        BIGINT,
-	"created_time"         TIMESTAMP WITH TIME ZONE,
-	"contract_standard_id" BIGINT REFERENCES "contract_standard" (contract_standard_id)
+	"contract_standard_id" BIGINT REFERENCES "contract_standard" (contract_standard_id),
+	"abi"                  JSONB
 );
 
 -- Default v0 contracts

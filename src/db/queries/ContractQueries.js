@@ -1,12 +1,11 @@
 const hexToBytea = require('../../util/hexToBytea.js');
 
-class BlockchainQueries {
+class ContractQueries {
 	static addContract(
 		blockchain_id,
 		address,
-		created_block,
-		created_time,
-		contract_standard = null
+		contract_standard,
+		abi
 	) {
 		return {
 			text: `
@@ -14,27 +13,33 @@ class BlockchainQueries {
 					contract (
 						blockchain_id,
 						address,
-						created_block,
-						created_time,
-						contract_standard
+						contract_standard_id,
+						abi
 					)
 				VALUES (
 					$1,
 					$2,
-					$3,
-					$4,
-					$5
-				);
+					COALESCE((
+						SELECT
+							contract_standard_id
+						FROM
+							contract_standard
+						WHERE
+							version = 0 AND
+							standard = $3
+					), NULL),
+					$4
+				)
+				RETURNING *;
 			`,
 			values: [
 				blockchain_id,
 				hexToBytea(address),
-				created_block,
-				created_time,
-				contract_standard
+				contract_standard,
+				abi
 			]
 		}
 	}
 }
 
-module.exports = BlockchainQueries;
+module.exports = ContractQueries;

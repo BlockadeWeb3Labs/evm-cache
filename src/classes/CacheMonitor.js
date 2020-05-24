@@ -3,6 +3,8 @@ const db    = require('../db/db.js');
 const sleep = require('../util/sleep.js');
 
 const BlockQueries = require('../db/queries/BlockQueries.js');
+const TransactionQueries = require('../db/queries/TransactionQueries.js');
+const ContractQueries = require('../db/queries/ContractQueries.js');
 
 class CacheMonitor {
 	constructor(blockchain_id, client) {
@@ -42,11 +44,29 @@ class CacheMonitor {
 	}
 
 	async getBlock(block_number) {
-		this.evmClient.getBlock(block_number, (err, block) => {
+		this.evmClient.getBlock(block_number, async (err, block) => {
 			if (err) {
-				log.debug("Error:", err);
-				sleep(1000);
+				log.error("Error:", err);
+				process.exit(1);
+			} else if (!block) {
+				log.debug("No block found:", block_number);
+
+				// Release the client for a bit
+				this.client.release();
+				await sleep(5000);
+				let pool = db.getPool();
+				this.client = await pool.connect();
+
+				if (!this.client) {
+					log.error('Error acquiring client');
+					process.exit(1);
+				}
+
+				// Try this block again
+				return this.getBlock(parseInt(block_number, 10));
 			}
+
+			log.info(`At block #${block.number}`);
 
 			// Save the block
 			this.client.query(BlockQueries.addBlock(
@@ -57,16 +77,42 @@ class CacheMonitor {
 				block.nonce,
 				block.gasLimit,
 				block.gasUsed,
-				block.timestamp
+				block.timestamp,
+				block.sha3Uncles,
+				block.logsBloom,
+				block.transactionsRoot,
+				block.receiptsRoot,
+				block.stateRoot,
+				block.mixHash,
+				block.miner,
+				block.difficulty,
+				block.extraData,
+				block.size
 			), async (err, result) => {
 				if (err) {
-					client.release();
+					this.client.release();
 					log.error('Error executing query', err.stack);
 					process.exit(1);
 				}
 
+				if (!result || !result.rowCount) {
+					this.client.release();
+					log.error('No result returned for');
+					log.error(block);
+					log.error('^^ No result returned ^^');
+					process.exit(1);
+				}
+
+				// Get the database record block ID
+				let block_id = result.rows[0].block_id;
+
+				// Insert any ommers
+				if (block.uncles && block.uncles.length) {
+					await this.addOmmers(block_id, block.uncles);
+				}
+
 				for (let idx = 0; idx < block.transactions.length; idx++) {
-					await this.getTransaction(block.transactions[idx]);
+					await this.getTransaction(block_id, block.transactions[idx]);
 				}
 
 				// Move to the next block
@@ -75,7 +121,17 @@ class CacheMonitor {
 		});
 	}
 
-	async getTransaction(transaction) {
+	async addOmmers(nibling_block_id, ommers) {
+		for (let idx = 0; idx < ommers.length; idx++) {
+			await this.client.query(BlockQueries.addOmmer(
+				this.blockchain_id,
+				ommers[idx],
+				nibling_block_id
+			));
+		}
+	}
+
+	async getTransaction(block_id, transaction) {
 		let receipt = await this.evmClient.getTransactionReceipt(transaction.hash);
 
 		// This is a contract creation
@@ -84,27 +140,59 @@ class CacheMonitor {
 				"Contract Address found in block " + 
 				transaction.blockNumber + ": " + receipt.contractAddress
 			);
+
+			await this.client.query(ContractQueries.addContract(
+				this.blockchain_id,
+				receipt.contractAddress,
+				null,
+				null
+			));
 		}
 
 		// Add the transaction
-		console.log(receipt);
+		let result = await this.client.query(TransactionQueries.addTransaction(
+			block_id,
+			transaction.hash,
+			transaction.nonce,
+			transaction.transactionIndex,
+			transaction.from,
+			transaction.to,
+			transaction.value,
+			transaction.gasPrice,
+			transaction.gas,
+			transaction.input,
+			receipt.status || null,
+			receipt.contractAddress || null,
+			transaction.v,
+			transaction.r,
+			transaction.s
+		));
+
+		if (!result || !result.rowCount) {
+			this.client.release();
+			log.error('No result returned for');
+			log.error(transaction);
+			log.error('^^ No result returned in block ' + block_id + ' ^^');
+			process.exit(1);
+		}
+
+		// Get the database identifier for transaction ID
+		let transaction_id = result.rows[0].transaction_id;
 
 		if (!receipt.logs || !receipt.logs.length) {
-			continue;
+			return;
 		}
 
-		/**
-		 * Logs contain the signature + all indexed arguments
-		 **/
-		 /*
-		for (let logIdx = 0; logIdx < receipt.logs.length; logIdx++) {
-			if (!receipt.logs[logIdx].topics) {
-				continue;
-			}
-
-
+		// Add the logs
+		for (let idx = 0; idx < receipt.logs.length; idx++) {
+			await this.client.query(TransactionQueries.addLog(
+				transaction_id,
+				receipt.logs[idx].logIndex,
+				receipt.logs[idx].address,
+				receipt.logs[idx].data,
+				...receipt.logs[idx].topics
+			));
 		}
-		*/
 	}
 }
 
