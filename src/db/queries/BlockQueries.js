@@ -110,6 +110,25 @@ class BlockQueries {
 		}
 	}
 
+	static deleteBlock(
+		blockchain_id,
+		block_id
+	) {
+		return {
+			text: `
+				DELETE FROM
+					block
+				WHERE
+					blockchain_id = $1 AND
+					number = $2;
+			`,
+			values: [
+				blockchain_id,
+				block_id
+			]
+		}
+	}
+
 	static addOmmer(
 		blockchain_id,
 		hash,
@@ -135,6 +154,34 @@ class BlockQueries {
 				blockchain_id,
 				hash,
 				nibling_block_id
+			]
+		}
+	}
+
+	static deleteOmmers(
+		blockchain_id,
+		block_id
+	) {
+		return {
+			text: `
+				DELETE FROM
+					ommer
+				WHERE
+					nibling_block_id = (
+						SELECT
+							block_id
+						FROM
+							block
+						WHERE
+							blockchain_id = $1 AND
+							number = $2
+						LIMIT
+							1
+					);
+			`,
+			values: [
+				blockchain_id,
+				block_id
 			]
 		}
 	}

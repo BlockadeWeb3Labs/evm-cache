@@ -125,6 +125,69 @@ class TransactionQueries {
 			]
 		}
 	}
+
+	static deleteLogs(
+		blockchain_id,
+		block_id
+	) {
+		return {
+			text: `
+				DELETE FROM
+					log
+				WHERE
+					transaction_id IN (
+						SELECT
+							transaction_id
+						FROM
+							transaction
+						WHERE
+							block_id = (
+								SELECT
+									block_id
+								FROM
+									block
+								WHERE
+									blockchain_id = $1 AND
+									number = $2
+								LIMIT
+									1
+							)
+					);
+			`,
+			values: [
+				blockchain_id,
+				block_id
+			]
+		}
+	}
+
+	static deleteTransactions(
+		blockchain_id,
+		block_id
+	) {
+		return {
+			text: `
+				DELETE FROM
+					transaction
+				WHERE
+					block_id = (
+						SELECT
+							block_id
+						FROM
+							block
+						WHERE
+							blockchain_id = $1 AND
+							number = $2
+						LIMIT
+							1
+					);
+			`,
+			values: [
+				blockchain_id,
+				block_id
+			]
+		}
+	}
 }      
 
 module.exports = TransactionQueries;

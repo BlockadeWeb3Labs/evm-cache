@@ -23,7 +23,7 @@ class CacheMonitor {
 		}
 
 		// Determine where to start
-		this.client.query(BlockQueries.getLatestBlock(this.blockchain_id), (err, result) => {
+		this.client.query(BlockQueries.getLatestBlock(this.blockchain_id), async (err, result) => {
 			if (err) {
 				this.client.release();
 				log.error('Error executing query', err.stack);
@@ -35,12 +35,49 @@ class CacheMonitor {
 				latest_number = 0;
 				log.info("No latest block, starting at 0");
 			} else {
-				latest_number = parseInt(result.rows[0].number, 10) + 1;
+				// Rerun the current latest number - see truncate below
+				latest_number = parseInt(result.rows[0].number, 10);
 				log.info("Retrieved latest block:", latest_number);
 			}
 
+			// First we're going to truncate everything related to the current block
+			// so we can stop and start without missing data in-between
+			await this.flushBlock(latest_number);
+
 			this.getBlock(latest_number);
 		});
+	}
+
+	async flushBlock(block_number) {
+		log.info("Flushing", block_number);
+
+		await this.client.query(TransactionQueries.deleteLogs(
+			this.blockchain_id,
+			block_number
+		));
+
+		log.info("Logs deleted");
+
+		await this.client.query(TransactionQueries.deleteTransactions(
+			this.blockchain_id,
+			block_number
+		));
+
+		log.info("Transactions deleted");
+
+		await this.client.query(BlockQueries.deleteOmmers(
+			this.blockchain_id,
+			block_number
+		));
+
+		log.info("Ommers deleted");
+
+		await this.client.query(BlockQueries.deleteBlock(
+			this.blockchain_id,
+			block_number
+		));
+
+		log.info("Completed flushing", block_number);
 	}
 
 	async getBlock(block_number) {

@@ -30,6 +30,7 @@ class ContractQueries {
 					), NULL),
 					$4
 				)
+				ON CONFLICT DO NOTHING
 				RETURNING *;
 			`,
 			values: [
