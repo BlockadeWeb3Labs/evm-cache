@@ -5,6 +5,14 @@ CREATE TYPE ADDRESS_TYPE as ENUM(
 
 CREATE OR REPLACE VIEW address AS
 SELECT
+	"miner" AS "address",
+	'eoa'::ADDRESS_TYPE AS "type"
+FROM
+	block
+WHERE
+	"miner" IS NOT NULL
+UNION
+SELECT
 	"from" AS "address",
 	'eoa'::ADDRESS_TYPE AS "type"
 FROM
