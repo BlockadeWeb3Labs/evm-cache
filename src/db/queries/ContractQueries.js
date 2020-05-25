@@ -41,6 +41,34 @@ class ContractQueries {
 			]
 		}
 	}
+
+	static getContractsInBlockRange(
+		blockchain_id,
+		start_block_number,
+		end_block_number
+	) {
+		return {
+			text: `
+				SELECT
+					t.contract_address,
+					t.input
+				FROM
+					transaction t,
+					block b
+				WHERE
+					b.blockchain_id = $1 AND
+					b.number >= $2 AND
+					b.number < $3 AND
+					b.block_id = t.block_id AND
+					t.contract_address IS NOT NULL;
+			`,
+			values: [
+				blockchain_id,
+				start_block_number,
+				end_block_number
+			]
+		}
+	}
 }
 
 module.exports = ContractQueries;
