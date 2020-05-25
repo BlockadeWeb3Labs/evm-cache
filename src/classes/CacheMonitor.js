@@ -143,29 +143,47 @@ class CacheMonitor {
 				// Get the database record block ID
 				let block_id = result.rows[0].block_id;
 
+				// Queue up all of the tasks
+				let promises = [];
+
 				// Insert any ommers
 				if (block.uncles && block.uncles.length) {
-					await this.addOmmers(block_id, block.uncles);
+					promises.push(this.addOmmers(block_id, block.uncles));
 				}
 
 				for (let idx = 0; idx < block.transactions.length; idx++) {
-					await this.getTransaction(block_id, block.transactions[idx]);
+					promises.push(this.getTransaction(block_id, block.transactions[idx]));
 				}
 
-				// Move to the next block
-				this.getBlock(parseInt(block.number, 10) + 1);
+				Promise.all(promises).then(values => {
+					// Move to the next block
+					this.getBlock(parseInt(block.number, 10) + 1);
+				}).catch(error => {
+					log.error('Promises failed for retrieving all block data');
+					log.error('Error:');
+					log.error(error);
+					log.error('Error Message:');
+					log.error(error.message);
+					process.exit(1);
+				});
 			});
 		});
 	}
 
 	async addOmmers(nibling_block_id, ommers) {
+		let promises = [];
+
 		for (let idx = 0; idx < ommers.length; idx++) {
-			await this.client.query(BlockQueries.addOmmer(
-				this.blockchain_id,
-				ommers[idx],
-				nibling_block_id
-			));
+			promises.push(
+				this.client.query(BlockQueries.addOmmer(
+					this.blockchain_id,
+					ommers[idx],
+					nibling_block_id
+				))
+			);
 		}
+
+		return Promise.all(promises);
 	}
 
 	async getTransaction(block_id, transaction) {
