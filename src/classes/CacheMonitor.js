@@ -146,6 +146,9 @@ class CacheMonitor {
 				// Queue up all of the tasks
 				let promises = [];
 
+				// Use a transaction for all of the promises
+				await this.client.query('BEGIN;');
+
 				// Insert any ommers
 				if (block.uncles && block.uncles.length) {
 					promises.push(this.addOmmers(block_id, block.uncles));
@@ -155,10 +158,16 @@ class CacheMonitor {
 					promises.push(this.getTransaction(block_id, block.transactions[idx]));
 				}
 
-				Promise.all(promises).then(values => {
+				Promise.all(promises).then(async values => {
+					// Commit the transaction for all of the promises
+					await this.client.query('COMMIT;');
+
 					// Move to the next block
 					this.getBlock(parseInt(block.number, 10) + 1);
-				}).catch(error => {
+				}).catch(async error => {
+					// Rollback the transaction for all of the promises
+					await this.client.query('ROLLBACK;');
+
 					log.error('Promises failed for retrieving all block data');
 					log.error('Error:');
 					log.error(error);
