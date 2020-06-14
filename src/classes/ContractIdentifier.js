@@ -1,17 +1,15 @@
+require('dotenv').config();
 const fs = require('fs');
 const log = require('loglevel');
 const Web3 = require('web3');
-const db = require('../db/db.js');
+const db = require('../database/Database.js');
 const byteaBufferToHex = require('../util/byteaBufferToHex.js');
-
-//const BlockQueries = require('../db/queries/BlockQueries.js');
-//const TransactionQueries = require('../db/queries/TransactionQueries.js');
-const ContractQueries = require('../db/queries/ContractQueries.js');
+const ContractQueries = require('../database/queries/ContractQueries.js');
 
 class ContractIdentifier {
-	constructor(blockchain_id) {
+	constructor(blockchain_id, endpoint) {
 		this.blockchain_id = blockchain_id;
-		this.web3 = new Web3();
+		this.web3 = new Web3(endpoint);
 		this.pool = db.getPool();
 		this.client = null;
 	}
@@ -59,12 +57,19 @@ class ContractIdentifier {
 		});
 	}
 
-	determineStandard(input) {
+	async evaluate(contract_address) {
+		let code = await this.web3.eth.getCode(contract_address);
+		let matches = this.determineStandard(code.toLowerCase(), true);
+		console.log("Matches for", contract_address, matches);
+		process.exit();
+	}
+
+	determineStandard(input, verbose = false) {
 		const requiredFunctions = {
 			'erc20' : [
 				'balanceOf',
 				'transfer',
-				'transferFrom',
+				'transferFrom', // Missing from some older erc-20 contracts
 				'approve',
 				'totalSupply'
 			],
@@ -90,8 +95,8 @@ class ContractIdentifier {
 
 		const requiredEvents = {
 			'erc20' : [
-				'Approval',
-				'Transfer'
+				'Transfer',
+				'Approval'
 			],
 			'erc721' : [
 				'Transfer',
@@ -134,8 +139,11 @@ class ContractIdentifier {
 					sig = sig.slice(2).toLowerCase(); // Remove 0x and force lowercase jic
 
 					if (input.indexOf(sig) === -1) {
+						verbose && log.debug(contractType + " function: " + abis[contractType][idx].name, ": NOT FOUND");
 						matches[contractType] = false;
-						break contract_standard;
+						//break contract_standard;
+					} else {
+						verbose && log.debug(contractType + " function: " + abis[contractType][idx].name, ": FOUND");
 					}
 				}
 			}
@@ -156,8 +164,11 @@ class ContractIdentifier {
 					sig = sig.slice(2).toLowerCase(); // Remove 0x and force lowercase jic
 
 					if (input.indexOf(sig) === -1) {
+						verbose && log.debug(contractType + " event: " + abis[contractType][idx].name, ": NOT FOUND");
 						matches[contractType] = false;
-						break contract_standard;
+						//break contract_standard;
+					} else {
+						verbose && log.debug(contractType + " event: " + abis[contractType][idx].name, ": FOUND");
 					}
 				}
 			}

@@ -22,7 +22,8 @@
     "dotenv": "^8.2.0",
     "evm-chain-monitor": "git+https://github.com/BlockadeLabs/evm-chain-monitor.git",
     "loglevel": "^1.6.8",
-    "pg": "^8.2.1"
+    "pg": "^8.2.1",
+    "yargs": "^15.3.1"
   },
   "devDependencies": {
     "nodemon": "^2.0.4"

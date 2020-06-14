@@ -1,8 +1,14 @@
-const log    = require('loglevel');
-const pg     = require('pg');
+// Required libraries
+const log = require('loglevel');
+const pg  = require('pg');
+
+// Pull the config
 const config = require('../config/config.js');
 
-class DB {
+// Custom Client handler
+const Client = require('./Client.js');
+
+class Database {
 	constructor() {
 		this.pool = new pg.Pool({
 			host:                    config.DB_HOST,
@@ -27,11 +33,22 @@ class DB {
 	getPool() {
 		return this.pool;
 	}
+
+	async connect(callback) {
+		return this.getPool().connect((err, client, release) => {
+			if (err) {
+				log.error('Error acquiring client', err.stack);
+				process.exit(1);
+			}
+
+			callback(new Client(client, release), release);
+		});
+	}
 }
 
-// Singleton DB class
+// Singleton Database class
 if (!global.databaseInstance) {
-	global.databaseInstance = new DB();
+	global.databaseInstance = new Database();
 }
 
 module.exports = global.databaseInstance;

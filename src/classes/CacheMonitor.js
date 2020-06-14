@@ -1,5 +1,5 @@
 const log   = require('loglevel');
-const db    = require('../db/db.js');
+const db    = require('../database/Database.js');
 const sleep = require('../util/sleep.js');
 
 const BlockQueries = require('../db/queries/BlockQueries.js');
