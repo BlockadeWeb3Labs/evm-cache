@@ -1,16 +1,21 @@
+const argv = require('yargs').argv;
 const log = require('loglevel');
-const db = require('../db/db.js');
-const BlockchainQueries = require('../db/queries/BlockchainQueries.js');
+const db = require('../database/database.js');
+const BlockchainQueries = require('../database/queries/BlockchainQueries.js');
 
-if (process.argv.length < 5) {
+if (
+	!argv.hasOwnProperty('type') ||
+	!argv.hasOwnProperty('name') ||
+	!argv.hasOwnProperty('endpoint')
+) {
 	log.error("Missing information to add a blockchain to the database:");
-	log.error("\tnode addBlockchain.js [blockchain-type] [name] [endpoint]");
+	log.error("\tnode addBlockchain.js --type [blockchain-type] --name [name] --endpoint [endpoint]");
 	process.exit(1);
 }
 
-let type = process.argv[2];
-let name = process.argv[3];
-let endpoint = process.argv[4];
+let type = argv.type;
+let name = argv.name;
+let endpoint = argv.endpoint;
 
 let pool = db.getPool();
 pool.connect((err, client, release) => {

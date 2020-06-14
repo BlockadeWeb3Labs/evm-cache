@@ -112,7 +112,7 @@ class BlockQueries {
 
 	static deleteBlock(
 		blockchain_id,
-		block_id
+		number
 	) {
 		return {
 			text: `
@@ -124,7 +124,7 @@ class BlockQueries {
 			`,
 			values: [
 				blockchain_id,
-				block_id
+				number
 			]
 		}
 	}
@@ -132,7 +132,7 @@ class BlockQueries {
 	static addOmmer(
 		blockchain_id,
 		hash,
-		nibling_block_id
+		nibling_block_hash
 	) {
 		return {
 			text: `
@@ -140,7 +140,7 @@ class BlockQueries {
 					ommer (
 						blockchain_id,
 						hash,
-						nibling_block_id
+						nibling_block_hash
 					)
 				VALUES (
 					$1,
@@ -152,24 +152,24 @@ class BlockQueries {
 			`,
 			values: [
 				blockchain_id,
-				hash,
-				nibling_block_id
+				hexToBytea(hash),
+				hexToBytea(nibling_block_hash)
 			]
 		}
 	}
 
 	static deleteOmmers(
 		blockchain_id,
-		block_id
+		number
 	) {
 		return {
 			text: `
 				DELETE FROM
 					ommer
 				WHERE
-					nibling_block_id = (
+					nibling_block_hash = (
 						SELECT
-							block_id
+							hash
 						FROM
 							block
 						WHERE
@@ -181,7 +181,7 @@ class BlockQueries {
 			`,
 			values: [
 				blockchain_id,
-				block_id
+				number
 			]
 		}
 	}

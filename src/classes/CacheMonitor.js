@@ -2,14 +2,16 @@ const log   = require('loglevel');
 const db    = require('../database/Database.js');
 const sleep = require('../util/sleep.js');
 
-const BlockQueries = require('../db/queries/BlockQueries.js');
-const TransactionQueries = require('../db/queries/TransactionQueries.js');
-const ContractQueries = require('../db/queries/ContractQueries.js');
+const BlockQueries = require('../database/queries/BlockQueries.js');
+const TransactionQueries = require('../database/queries/TransactionQueries.js');
+const ContractQueries = require('../database/queries/ContractQueries.js');
 
 class CacheMonitor {
-	constructor(blockchain_id, client) {
-		this.blockchain_id = blockchain_id;
-		this.evmClient = client;
+	constructor(options) {
+		this.blockchain_id = options.blockchain_id;
+		this.evmClient = options.client;
+		this.startBlockOverride = options.startBlockOverride;
+		this.endBlockOverride = options.endBlockOverride;
 		this.client = null; // Covered in start()
 	}
 
@@ -31,7 +33,10 @@ class CacheMonitor {
 			}
 
 			let latest_number;
-			if (!result || !result.rowCount) {
+			if (this.startBlockOverride !== false) {
+				latest_number = this.startBlockOverride;
+				log.info("Using start block number override:", latest_number);
+			} else if (!result || !result.rowCount) {
 				latest_number = 0;
 				log.info("No latest block, starting at 0");
 			} else {
@@ -81,6 +86,11 @@ class CacheMonitor {
 	}
 
 	async getBlock(block_number) {
+		if (this.endBlockOverride !== false && block_number >= this.endBlockOverride) {
+			log.info("Reached endBlockOverride:", this.endBlockOverride);
+			process.exit();
+		}
+
 		this.evmClient.getBlock(block_number, async (err, block) => {
 			if (err) {
 				log.error("Error:", err);
@@ -141,7 +151,7 @@ class CacheMonitor {
 				}
 
 				// Get the database record block ID
-				let block_id = result.rows[0].block_id;
+				//let block_id = result.rows[0].block_id;
 
 				// Queue up all of the tasks
 				let promises = [];
@@ -151,11 +161,11 @@ class CacheMonitor {
 
 				// Insert any ommers
 				if (block.uncles && block.uncles.length) {
-					promises.push(this.addOmmers(block_id, block.uncles));
+					promises.push(this.addOmmers(block.hash, block.uncles));
 				}
 
 				for (let idx = 0; idx < block.transactions.length; idx++) {
-					promises.push(this.getTransaction(block_id, block.transactions[idx]));
+					promises.push(this.getTransaction(block.hash, block.transactions[idx]));
 				}
 
 				Promise.all(promises).then(async values => {
@@ -179,7 +189,7 @@ class CacheMonitor {
 		});
 	}
 
-	async addOmmers(nibling_block_id, ommers) {
+	async addOmmers(nibling_block_hash, ommers) {
 		let promises = [];
 
 		for (let idx = 0; idx < ommers.length; idx++) {
@@ -187,7 +197,7 @@ class CacheMonitor {
 				this.client.query(BlockQueries.addOmmer(
 					this.blockchain_id,
 					ommers[idx],
-					nibling_block_id
+					nibling_block_hash
 				))
 			);
 		}
@@ -195,27 +205,12 @@ class CacheMonitor {
 		return Promise.all(promises);
 	}
 
-	async getTransaction(block_id, transaction) {
+	async getTransaction(block_hash, transaction) {
 		let receipt = await this.evmClient.getTransactionReceipt(transaction.hash);
-
-		// This is a contract creation
-		if (!transaction.to && receipt.contractAddress) {
-			log.debug(
-				"Contract Address found in block " + 
-				transaction.blockNumber + ": " + receipt.contractAddress
-			);
-
-			await this.client.query(ContractQueries.addContract(
-				this.blockchain_id,
-				receipt.contractAddress,
-				null,
-				null
-			));
-		}
 
 		// Add the transaction
 		let result = await this.client.query(TransactionQueries.addTransaction(
-			block_id,
+			block_hash,
 			transaction.hash,
 			transaction.nonce,
 			transaction.transactionIndex,
@@ -241,7 +236,7 @@ class CacheMonitor {
 		}
 
 		// Get the database identifier for transaction ID
-		let transaction_id = result.rows[0].transaction_id;
+		//let transaction_id = result.rows[0].transaction_id;
 
 		if (!receipt.logs || !receipt.logs.length) {
 			return;
@@ -250,7 +245,7 @@ class CacheMonitor {
 		// Add the logs
 		for (let idx = 0; idx < receipt.logs.length; idx++) {
 			await this.client.query(TransactionQueries.addLog(
-				transaction_id,
+				transaction.hash,
 				receipt.logs[idx].logIndex,
 				receipt.logs[idx].address,
 				receipt.logs[idx].data,

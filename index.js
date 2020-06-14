@@ -1,3 +1,4 @@
+const argv = require('yargs').argv;
 const log = require('loglevel');
 const db = require('./src/database/Database.js');
 const BlockchainQueries = require('./src/database/queries/BlockchainQueries.js');
@@ -34,8 +35,18 @@ pool.connect((err, client, release) => {
 			"endpoint" : node.endpoint
 		});
 
+		// Allow the user to set overrides
+		let startBlockOverride = argv.hasOwnProperty('start') && parseInt(argv.start, 10);
+		let endBlockOverride   = argv.hasOwnProperty('end')   && parseInt(argv.end, 10);
+
 		// Start the monitor
-		let cm = new CacheMonitor(node.blockchain_id, client);
+		let cm = new CacheMonitor({
+			blockchain_id : node.blockchain_id,
+			client,
+			startBlockOverride,
+			endBlockOverride
+		});
+
 		cm.start();
 
 		log.debug("Started client monitor.");

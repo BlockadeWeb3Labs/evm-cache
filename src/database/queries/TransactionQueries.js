@@ -2,7 +2,7 @@ const hexToBytea = require('../../util/hexToBytea.js');
 
 class TransactionQueries {
 	static addTransaction(
-		block_id,
+		block_hash,
 		hash,
 		nonce,
 		transaction_index,
@@ -22,7 +22,7 @@ class TransactionQueries {
 			text: `
 				INSERT INTO
 					transaction (
-						block_id,
+						block_hash,
 						hash,
 						nonce,
 						transaction_index,
@@ -59,7 +59,7 @@ class TransactionQueries {
 				RETURNING *;
 			`,
 			values: [
-				block_id,
+				hexToBytea(block_hash),
 				hexToBytea(hash),
 				nonce,
 				transaction_index,
@@ -79,7 +79,7 @@ class TransactionQueries {
 	}
 
 	static addLog(
-		transaction_id,
+		transaction_hash,
 		log_index,
 		address,
 		data,
@@ -92,7 +92,7 @@ class TransactionQueries {
 			text: `
 				INSERT INTO
 					log (
-						transaction_id,
+						transaction_hash,
 						log_index,
 						address,
 						data,
@@ -114,7 +114,7 @@ class TransactionQueries {
 				ON CONFLICT DO NOTHING;
 			`,
 			values: [
-				transaction_id,
+				hexToBytea(transaction_hash),
 				log_index,
 				hexToBytea(address),
 				hexToBytea(data),
@@ -128,22 +128,22 @@ class TransactionQueries {
 
 	static deleteLogs(
 		blockchain_id,
-		block_id
+		number
 	) {
 		return {
 			text: `
 				DELETE FROM
 					log
 				WHERE
-					transaction_id IN (
+					transaction_hash IN (
 						SELECT
-							transaction_id
+							hash
 						FROM
 							transaction
 						WHERE
-							block_id = (
+							block_hash = (
 								SELECT
-									block_id
+									hash
 								FROM
 									block
 								WHERE
@@ -156,23 +156,23 @@ class TransactionQueries {
 			`,
 			values: [
 				blockchain_id,
-				block_id
+				number
 			]
 		}
 	}
 
 	static deleteTransactions(
 		blockchain_id,
-		block_id
+		number
 	) {
 		return {
 			text: `
 				DELETE FROM
 					transaction
 				WHERE
-					block_id = (
+					block_hash = (
 						SELECT
-							block_id
+							hash
 						FROM
 							block
 						WHERE
@@ -184,7 +184,7 @@ class TransactionQueries {
 			`,
 			values: [
 				blockchain_id,
-				block_id
+				number
 			]
 		}
 	}
