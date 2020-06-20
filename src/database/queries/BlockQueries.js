@@ -21,6 +21,26 @@ class BlockQueries {
 		}
 	}
 
+	static getBlockTransactionCount(blockchain_id, number) {
+		return {
+			text: `
+				SELECT
+					COUNT(t.*)
+				FROM
+					transaction t,
+					block b
+				WHERE
+					b.blockchain_id = $1 AND
+					b.number = $2 AND
+					b.hash = t.block_hash;
+			`,
+			values: [
+				blockchain_id,
+				number
+			]
+		}
+	}
+
 	static addBlock(
 		blockchain_id,
 		number,

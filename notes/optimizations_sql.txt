@@ -1,0 +1,9 @@
+Things I've done to speed up the ingestion process, and updating data across more than half of the transaction / log records at once:
+- increase workmem to 1 GB, reduce random_page_cost to 1
+- turn off sequential scan
+- increase iops for the disk on RDS
+- add indexes in some columns
+- remove indexes in altered / updated columns
+- turn on / off triggers
+- run parallel nodes to pull in data
+- \copy to and from
