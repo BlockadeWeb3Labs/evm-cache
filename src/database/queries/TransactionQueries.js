@@ -195,11 +195,16 @@ class TransactionQueries {
 		return {
 			text: `
 				SELECT
-					*
+					l.*,
+					cm.standard,
+					cm.abi
 				FROM
-					log
+					log l
+				LEFT JOIN
+					contract_meta cm ON
+						cm.address = l.address
 				WHERE
-					transaction_hash = $1
+					l.transaction_hash = $1
 			`,
 			values: [
 				hexToBytea(transaction_hash)

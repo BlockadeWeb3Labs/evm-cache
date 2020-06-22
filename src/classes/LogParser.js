@@ -31,25 +31,16 @@ class LogParser {
 		});
 	}
 
-	async decodeLogs(logs) {
-		let Client = await Database.connect();
-
+	async decodeLogs(txLogs) {
 		let decodedLogs = {};
-		for (let txLog of logs) {
-			let address = byteaBufferToHex(txLog.address);
-			let result = await Client.query(ContractQueries.getContractMeta(address));
-
-			if (!result.rowCount || !result.rows[0].standard) {
-				log.error(`Contract meta for ${address} not found in the database.`);
-				return false;
-			}
-
-			let standard = result.rows[0].standard;
-			let event = this.decodeLog(standard, byteaBufferToHex(txLog.data), this.pullTopics(txLog));
-			decodedLogs[txLog.log_id] = event;
+		for (let txLog of txLogs) {
+			decodedLogs[txLog.log_id] = this.decodeLog(
+				txLog.abi,
+				txLog.standard,
+				byteaBufferToHex(txLog.data),
+				this.pullTopics(txLog)
+			);
 		}
-
-		Client.release();
 
 		return decodedLogs;
 	}
@@ -63,15 +54,19 @@ class LogParser {
 		return topics;
 	}
 
-	decodeLog(standardOrAbi, data, topics) {
-		let signatures = {}, abi = {};
-		if (typeof standardOrAbi === 'string') {
-			// Standard
-			signatures = abiCfg.eventSignatures[standardOrAbi];
-			abi = abiCfg.abis[standardOrAbi];
-		} else if (typeof standardOrAbi === 'object') {
+	decodeLog(abi, standard, data, topics) {
+		let signatures = {};
+		if (abi && typeof abi === 'object' && Object.keys(abi).length > 0) {
 			// ABI
 			signatures = {};
+		} else if (typeof standard === 'string' && standard.length) {
+			// Standard
+			signatures = abiCfg.eventSignatures[standard];
+			abi = abiCfg.abis[standard];
+		} else {
+			// Nothing to use
+			log.error("No valid ABI or standard provided to decode log.");
+			return;
 		}
 
 		// Determine the topic we're dealing with
@@ -90,13 +85,32 @@ class LogParser {
 				}
 
 				try {
-					return this.web3.eth.abi.decodeLog(inputs, data, topics);
+					let result = this.trimDecodedLogResult(
+						inputs, this.web3.eth.abi.decodeLog(inputs, data, topics)
+					);
+
+					return {
+						name : event,
+						result
+					};
 				} catch (ex) {
 					log.error(`Exception at decoding log, expected event: ${event}`);
 					return;
 				}
 			}
 		}
+	}
+
+	trimDecodedLogResult(inputs, result) {
+		let cleanResult = {};
+
+		for (let input of inputs) {
+			if (result.hasOwnProperty(input.name)) {
+				cleanResult[input.name] = result[input.name];
+			}
+		}
+
+		return cleanResult;
 	}
 
 }

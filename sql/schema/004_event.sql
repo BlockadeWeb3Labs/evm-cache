@@ -1,6 +1,6 @@
 CREATE TABLE event (
 	"event_id" BIGSERIAL PRIMARY KEY,
-	"log_id"   BIGINT REFERENCES "log" (log_id) NOT NULL,
+	"log_id"   BIGINT REFERENCES "log" (log_id) UNIQUE NOT NULL,
 	"name"     TEXT NOT NULL,
 	"result"   JSONB
 );
