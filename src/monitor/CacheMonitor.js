@@ -1,10 +1,9 @@
-const log   = require('loglevel');
-const db    = require('../database/Database.js');
+const log = require('loglevel');
+const Database = require('../database/Database.js');
 const sleep = require('../util/sleep.js');
 
 const BlockQueries = require('../database/queries/BlockQueries.js');
 const TransactionQueries = require('../database/queries/TransactionQueries.js');
-const ContractQueries = require('../database/queries/ContractQueries.js');
 
 class CacheMonitor {
 	constructor(options) {
@@ -12,72 +11,61 @@ class CacheMonitor {
 		this.evmClient = options.client;
 		this.startBlockOverride = options.startBlockOverride;
 		this.endBlockOverride = options.endBlockOverride;
-		this.client = null; // Covered in start()
+		this.Client = null; // Covered in start()
 	}
 
 	async start() {
-		let pool = db.getPool();
-		this.client = await pool.connect();
+		Database.connect((Client) => {
+			Client.query(BlockQueries.getLatestBlock(this.blockchain_id), async (result) => {
+				this.Client = Client;
 
-		if (!this.client) {
-			log.error('Error acquiring client');
-			process.exit(1);
-		}
+				let latest_number;
+				if (this.startBlockOverride !== false) {
+					latest_number = this.startBlockOverride;
+					log.info("Using start block number override:", latest_number);
+				} else if (!result || !result.rowCount) {
+					latest_number = 0;
+					log.info("No latest block, starting at 0");
+				} else {
+					// Rerun the current latest number - see truncate below
+					latest_number = parseInt(result.rows[0].number, 10);
+					log.info("Retrieved latest block:", latest_number);
+				}
 
-		// Determine where to start
-		this.client.query(BlockQueries.getLatestBlock(this.blockchain_id), async (err, result) => {
-			if (err) {
-				this.client.release();
-				log.error('Error executing query', err.stack);
-				process.exit(1);
-			}
+				// First we're going to truncate everything related to the current block
+				// so we can stop and start without missing data in-between
+				await this.flushBlock(latest_number);
 
-			let latest_number;
-			if (this.startBlockOverride !== false) {
-				latest_number = this.startBlockOverride;
-				log.info("Using start block number override:", latest_number);
-			} else if (!result || !result.rowCount) {
-				latest_number = 0;
-				log.info("No latest block, starting at 0");
-			} else {
-				// Rerun the current latest number - see truncate below
-				latest_number = parseInt(result.rows[0].number, 10);
-				log.info("Retrieved latest block:", latest_number);
-			}
-
-			// First we're going to truncate everything related to the current block
-			// so we can stop and start without missing data in-between
-			await this.flushBlock(latest_number);
-
-			this.getBlock(latest_number);
+				this.getBlock(latest_number);
+			});
 		});
 	}
 
 	async flushBlock(block_number) {
 		log.info("Flushing", block_number);
 
-		await this.client.query(TransactionQueries.deleteLogs(
+		await this.Client.query(TransactionQueries.deleteLogs(
 			this.blockchain_id,
 			block_number
 		));
 
 		log.info("Logs deleted");
 
-		await this.client.query(TransactionQueries.deleteTransactions(
+		await this.Client.query(TransactionQueries.deleteTransactions(
 			this.blockchain_id,
 			block_number
 		));
 
 		log.info("Transactions deleted");
 
-		await this.client.query(BlockQueries.deleteOmmers(
+		await this.Client.query(BlockQueries.deleteOmmers(
 			this.blockchain_id,
 			block_number
 		));
 
 		log.info("Ommers deleted");
 
-		await this.client.query(BlockQueries.deleteBlock(
+		await this.Client.query(BlockQueries.deleteBlock(
 			this.blockchain_id,
 			block_number
 		));
@@ -99,24 +87,25 @@ class CacheMonitor {
 				log.debug("No block found:", block_number);
 
 				// Release the client for a bit
-				this.client.release();
+				this.Client.release();
+
+				// Wait before checking for the next block
 				await sleep(5000);
-				let pool = db.getPool();
-				this.client = await pool.connect();
 
-				if (!this.client) {
-					log.error('Error acquiring client');
-					process.exit(1);
-				}
+				Database.connect((Client) => {
+					Client.query(BlockQueries.getLatestBlock(this.blockchain_id), async (result) => {
+						this.Client = Client;
 
-				// Try this block again
-				return this.getBlock(parseInt(block_number, 10));
+						// Try this block again
+						return this.getBlock(parseInt(block_number, 10));
+					});
+				});
 			}
 
 			log.info(`At block #${block.number}`);
 
 			// Save the block
-			this.client.query(BlockQueries.addBlock(
+			this.Client.query(BlockQueries.addBlock(
 				this.blockchain_id,
 				block.number,
 				block.hash,
@@ -135,29 +124,20 @@ class CacheMonitor {
 				block.difficulty,
 				block.extraData,
 				block.size
-			), async (err, result) => {
-				if (err) {
-					this.client.release();
-					log.error('Error executing query', err.stack);
-					process.exit(1);
-				}
-
+			), async (result) => {
 				if (!result || !result.rowCount) {
-					this.client.release();
+					this.Client.release();
 					log.error('No result returned for');
 					log.error(block);
 					log.error('^^ No result returned ^^');
 					process.exit(1);
 				}
 
-				// Get the database record block ID
-				//let block_id = result.rows[0].block_id;
-
 				// Queue up all of the tasks
 				let promises = [];
 
 				// Use a transaction for all of the promises
-				await this.client.query('BEGIN;');
+				await this.Client.query('BEGIN;');
 
 				// Insert any ommers
 				if (block.uncles && block.uncles.length) {
@@ -170,13 +150,13 @@ class CacheMonitor {
 
 				Promise.all(promises).then(async values => {
 					// Commit the transaction for all of the promises
-					await this.client.query('COMMIT;');
+					await this.Client.query('COMMIT;');
 
 					// Move to the next block
 					this.getBlock(parseInt(block.number, 10) + 1);
 				}).catch(async error => {
 					// Rollback the transaction for all of the promises
-					await this.client.query('ROLLBACK;');
+					await this.Client.query('ROLLBACK;');
 
 					log.error('Promises failed for retrieving all block data');
 					log.error('Error:');
@@ -194,7 +174,7 @@ class CacheMonitor {
 
 		for (let idx = 0; idx < ommers.length; idx++) {
 			promises.push(
-				this.client.query(BlockQueries.addOmmer(
+				this.Client.query(BlockQueries.addOmmer(
 					this.blockchain_id,
 					ommers[idx],
 					nibling_block_hash
@@ -209,7 +189,7 @@ class CacheMonitor {
 		let receipt = await this.evmClient.getTransactionReceipt(transaction.hash);
 
 		// Add the transaction
-		let result = await this.client.query(TransactionQueries.addTransaction(
+		let result = await this.Client.query(TransactionQueries.addTransaction(
 			block_hash,
 			transaction.hash,
 			transaction.nonce,
@@ -228,15 +208,12 @@ class CacheMonitor {
 		));
 
 		if (!result || !result.rowCount) {
-			this.client.release();
+			this.Client.release();
 			log.error('No result returned for');
 			log.error(transaction);
-			log.error('^^ No result returned in block ' + block_id + ' ^^');
+			log.error('^^ No result returned in block ' + block_hash + ' ^^');
 			process.exit(1);
 		}
-
-		// Get the database identifier for transaction ID
-		//let transaction_id = result.rows[0].transaction_id;
 
 		if (!receipt.logs || !receipt.logs.length) {
 			return;
@@ -244,7 +221,7 @@ class CacheMonitor {
 
 		// Add the logs
 		for (let idx = 0; idx < receipt.logs.length; idx++) {
-			await this.client.query(TransactionQueries.addLog(
+			await this.Client.query(TransactionQueries.addLog(
 				transaction.hash,
 				receipt.logs[idx].logIndex,
 				receipt.logs[idx].address,

@@ -3,7 +3,7 @@ CREATE TABLE block (
 	"blockchain_id"     BIGINT REFERENCES "blockchain" (blockchain_id) NOT NULL,
 	"number"            BIGINT NOT NULL,
 	"hash"              BYTEA NOT NULL UNIQUE,
-	"parent_hash"       BYTEA,
+	"parent_hash"       BYTEA, --REFERENCES "block" (hash),
 	"created_time"      TIMESTAMP WITH TIME ZONE,
 	"nonce"             BYTEA,
 	"gas_limit"         BIGINT,
@@ -25,13 +25,11 @@ CREATE TABLE ommer (
 	"ommer_id"           BIGSERIAL PRIMARY KEY,
 	"blockchain_id"      BIGINT REFERENCES "blockchain" (blockchain_id) NOT NULL,
 	"hash"               BYTEA NOT NULL UNIQUE,
-	--"nibling_block_id"   BIGINT REFERENCES "block" (block_id) NOT NULL,
 	"nibling_block_hash" BYTEA REFERENCES "block" (hash) NOT NULL
 );
 
 CREATE TABLE transaction (
 	"transaction_id"    BIGSERIAL PRIMARY KEY,
-	--"block_id"          BIGINT REFERENCES "block" (block_id) NOT NULL,
 	"block_hash"        BYTEA REFERENCES "block" (hash) NOT NULL,
 	"hash"              BYTEA NOT NULL UNIQUE,
 	"nonce"             BIGINT,
@@ -51,7 +49,6 @@ CREATE TABLE transaction (
 
 CREATE TABLE log (
 	"log_id"           BIGSERIAL PRIMARY KEY,
-	--"transaction_id"   BIGINT REFERENCES "transaction" (transaction_id) NOT NULL,
 	"transaction_hash" BYTEA REFERENCES "transaction" (hash) NOT NULL,
 	"log_index"        BIGINT,
 	"address"          BYTEA,
@@ -61,3 +58,6 @@ CREATE TABLE log (
 	"topic_2"          BYTEA,
 	"topic_3"          BYTEA
 );
+
+-- NOTE: topic_N could have been consolidated as topics BYTEA[]
+

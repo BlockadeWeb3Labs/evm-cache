@@ -1,6 +1,6 @@
 const argv = require('yargs').argv;
 const log = require('loglevel');
-const ContractIdentifier = require(__dirname + '/../classes/ContractIdentifier.js');
+const ContractController = require(__dirname + '/../controller/ContractController.js');
 
 if (!argv.hasOwnProperty('address')) {
 	log.error("Incorrect arguments for tool:");
@@ -9,9 +9,9 @@ if (!argv.hasOwnProperty('address')) {
 }
 
 (async (address) => {
-	const ci = new ContractIdentifier();
-	ci.determineStandard(address, (res) => {
-		console.log("Matches for", res.address, res.code_results, res.call_results);
+	const ci = new ContractController();
+	ci.setStandard(address, () => {
+		console.log("Done.");
 		process.exit();
 	});
 })(argv.address);

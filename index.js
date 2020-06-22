@@ -3,7 +3,7 @@ const log = require('loglevel');
 const db = require('./src/database/Database.js');
 const BlockchainQueries = require('./src/database/queries/BlockchainQueries.js');
 const EthereumClient = require('evm-chain-monitor').EthereumClient;
-const CacheMonitor = require('./src/classes/CacheMonitor.js');
+const CacheMonitor = require('./src/monitor/CacheMonitor.js');
 
 let pool = db.getPool();
 pool.connect((err, client, release) => {

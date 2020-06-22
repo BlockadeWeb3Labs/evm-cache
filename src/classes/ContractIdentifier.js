@@ -1,132 +1,67 @@
-require('dotenv').config();
-const fs = require('fs');
 const log = require('loglevel');
 const Web3 = require('web3');
-const db = require('../database/Database.js');
-const byteaBufferToHex = require('../util/byteaBufferToHex.js');
+const abiCfg = require('../config/abi.js');
+const Database = require('../database/Database.js');
 const ContractQueries = require('../database/queries/ContractQueries.js');
+const byteaBufferToHex = require('../util/byteaBufferToHex.js');
 
 class ContractIdentifier {
-	constructor(blockchain_id, endpoint) {
-		this.blockchain_id = blockchain_id;
-		this.web3 = new Web3(endpoint);
-		this.pool = db.getPool();
-		this.client = null;
+	constructor() {
+		this.web3 = new Web3();
 	}
 
-	async searchAndEvaluate(start_block_number, end_block_number, terminate_on_end = false) {
-		this.client = await this.pool.connect();
+	async determineStandard(address, callback = ()=>{}) {
+		Database.connect((Client) => {
+			Client.query(ContractQueries.getContractCode(address), async (result) => {
+				Client.release();
 
-		if (!this.client) {
-			log.error('Error acquiring client');
-			process.exit(1);
-		}
-
-		// Get the contracts in this range
-		return this.client.query(ContractQueries.getContractsInBlockRange(
-			this.blockchain_id,
-			start_block_number,
-			end_block_number
-		), async (err, result) => {
-			if (err) {
-				this.client.release();
-				log.error('Error executing query', err.stack);
-				process.exit(1);
-			}
-
-			if (!result || !result.rowCount) {
-				log.info("No contracts found in range");
-
-				if (terminate_on_end) {
-					process.exit();
+				if (!result.rowCount || !result.rows[0].input) {
+					log.error(`Address ${address} does not have contract creation transaction stored in the database.`);
+					return false;
 				}
 
-				return;
-			} else {
-				log.info("Found", result.rowCount, "contracts");
-			}
+				let code = byteaBufferToHex(result.rows[0].input);
 
-			for (let idx = 0; idx < result.rowCount; idx++) {
-				let matches = this.determineStandard(byteaBufferToHex(result.rows[idx].input).toLowerCase());
-				console.log("Matches for", byteaBufferToHex(result.rows[idx].contract_address), matches);
-			}
+				// Try to figure out the standard from the ABI
+				let code_results = this.determineStandardByCode(code, false);
 
-			if (terminate_on_end) {
-				process.exit();
-			}
+				// If one of these passed, then hand it back
+				let standard = null;
+				if (code_results.length === 1) {
+					standard = code_results[0];
+				} else if (code_results.length > 1) {
+					log.error(`Ambiguous code analysis result for ${address}, returned ${code_results}`);
+					return false;
+				}
+
+				// Failing? Try to guess the standard by calling the contract
+				let call_results = await this.determineStandardByCall(address, false);
+
+				callback({
+					address,
+					code_results,
+					call_results,
+					standard
+				});
+			});
 		});
 	}
 
-	async evaluate(contract_address) {
-		let code = await this.web3.eth.getCode(contract_address);
-		let matches = this.determineStandard(code.toLowerCase(), true);
-		console.log("Matches for", contract_address, matches);
-		process.exit();
-	}
+	determineStandardByCode(input, verbose = false) {
+		// Strictly lowercase comparisons
+		input = input.toLowerCase();
 
-	determineStandard(input, verbose = false) {
-		const requiredFunctions = {
-			'erc20' : [
-				'balanceOf',
-				'transfer',
-				'transferFrom', // Missing from some older erc-20 contracts
-				'approve',
-				'totalSupply'
-			],
-			'erc721' : [
-				'balanceOf',
-				'ownerOf',
-				'safeTransferFrom',
-				'transferFrom',
-				'approve',
-				'setApprovalForAll',
-				'getApproved',
-				'isApprovedForAll'
-			],
-			'erc1155' : [
-				'safeTransferFrom',
-				'safeBatchTransferFrom',
-				//'balanceOf', // Failing, for some reason
-				'balanceOfBatch',
-				'setApprovalForAll',
-				'isApprovedForAll'
-			]
-		};
+		const abis = abiCfg.abis;
+		const requiredEvents = abiCfg.events;
+		const requiredFunctions = abiCfg.functions;
 
-		const requiredEvents = {
-			'erc20' : [
-				'Transfer',
-				'Approval'
-			],
-			'erc721' : [
-				'Transfer',
-				'Approval',
-				'ApprovalForAll'
-			],
-			'erc1155' : [
-				'TransferSingle',
-				'TransferBatch',
-				'ApprovalForAll',
-				'URI'
-			]
-		};
-
-		const abis = {
-			'erc20'   : JSON.parse(fs.readFileSync(__dirname + '/../config/abi/v0/erc20.json', 'utf8')),
-			'erc721'  : JSON.parse(fs.readFileSync(__dirname + '/../config/abi/v0/erc721.json', 'utf8')),
-			'erc1155' : JSON.parse(fs.readFileSync(__dirname + '/../config/abi/v0/erc1155-mt.json', 'utf8'))
-		};
-
-		// Keep track of potential matches, true until proven false
-		let matches = {
-			'erc20'   : true,
-			'erc721'  : true,
-			'erc1155' : true
-		};
+		// Keep track of potential matches
+		let matches = abiCfg.contracts.slice();
 
 		// Find a matching standard by function
 		for (let contractType in requiredFunctions) {
 			if (!requiredFunctions.hasOwnProperty(contractType)) continue;
+			if (matches.indexOf(contractType) === -1) continue;
 
 			contract_standard:
 			for (let fIdx = 0; fIdx < requiredFunctions[contractType].length; fIdx++) {
@@ -140,8 +75,8 @@ class ContractIdentifier {
 
 					if (input.indexOf(sig) === -1) {
 						verbose && log.debug(contractType + " function: " + abis[contractType][idx].name, ": NOT FOUND");
-						matches[contractType] = false;
-						//break contract_standard;
+						matches.splice(matches.indexOf(contractType), 1);
+						break contract_standard;
 					} else {
 						verbose && log.debug(contractType + " function: " + abis[contractType][idx].name, ": FOUND");
 					}
@@ -152,6 +87,7 @@ class ContractIdentifier {
 		// Find a matching standard by event
 		for (let contractType in requiredEvents) {
 			if (!requiredEvents.hasOwnProperty(contractType)) continue;
+			if (matches.indexOf(contractType) === -1) continue;
 
 			contract_standard:
 			for (let fIdx = 0; fIdx < requiredEvents[contractType].length; fIdx++) {
@@ -165,8 +101,8 @@ class ContractIdentifier {
 
 					if (input.indexOf(sig) === -1) {
 						verbose && log.debug(contractType + " event: " + abis[contractType][idx].name, ": NOT FOUND");
-						matches[contractType] = false;
-						//break contract_standard;
+						matches.splice(matches.indexOf(contractType), 1);
+						break contract_standard;
 					} else {
 						verbose && log.debug(contractType + " event: " + abis[contractType][idx].name, ": FOUND");
 					}
@@ -175,6 +111,10 @@ class ContractIdentifier {
 		}
 
 		return matches;
+	}
+
+	async determineStandardByCall(address, verbose = false) {
+		return false;
 	}
 }
 

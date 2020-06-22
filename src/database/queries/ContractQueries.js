@@ -69,6 +69,79 @@ class ContractQueries {
 			]
 		}
 	}
+
+	static getContractCode(
+		address
+	) {
+		return {
+			text: `
+				SELECT
+					contract_address,
+					input
+				FROM
+					transaction
+				WHERE
+					contract_address = $1;
+			`,
+			values: [
+				hexToBytea(address)
+			]
+		}
+	}
+
+	static getContractMeta(
+		address
+	) {
+		return {
+			text: `
+				SELECT
+					*
+				FROM
+					contract_meta
+				WHERE
+					address = $1;
+			`,
+			values: [
+				hexToBytea(address)
+			]
+		}
+	}
+
+	static upsertContractMeta(
+		address,
+		standard,
+		abi,
+		name,
+		symbol
+	) {
+		return {
+			text: `
+				INSERT INTO
+					contract_meta (
+						address,
+						standard,
+						abi,
+						name,
+						symbol
+					)
+				VALUES (
+					$1, $2, $3, $4, $5
+				)
+				ON CONFLICT (address) DO UPDATE SET
+					standard = CASE WHEN EXCLUDED.standard IS NOT NULL THEN EXCLUDED.standard ELSE contract_meta.standard END,
+					abi      = CASE WHEN EXCLUDED.abi      IS NOT NULL THEN EXCLUDED.abi      ELSE contract_meta.abi      END,
+					name     = CASE WHEN EXCLUDED.name     IS NOT NULL THEN EXCLUDED.name     ELSE contract_meta.name     END,
+					symbol   = CASE WHEN EXCLUDED.symbol   IS NOT NULL THEN EXCLUDED.symbol   ELSE contract_meta.symbol   END
+			`,
+			values: [
+				hexToBytea(address),
+				standard,
+				abi,
+				name,
+				symbol
+			]
+		}
+	}
 }
 
 module.exports = ContractQueries;

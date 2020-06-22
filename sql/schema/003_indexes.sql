@@ -12,7 +12,6 @@ CREATE INDEX ommer_hash_idx ON "ommer" ("hash");
 CREATE INDEX ommer_nibling_block_hash_idx ON "ommer" ("nibling_block_hash");
 
 -- transaction indexes
---CREATE INDEX transaction_block_id_idx ON "transaction" ("block_id");
 CREATE INDEX transaction_block_hash_idx ON "transaction" ("block_hash");
 CREATE INDEX transaction_hash_idx ON "transaction" ("hash");
 CREATE INDEX transaction_from_idx ON "transaction" ("from");
@@ -20,6 +19,5 @@ CREATE INDEX transaction_to_idx ON "transaction" ("to");
 CREATE INDEX transaction_contract_address_idx ON "transaction" ("contract_address");
 
 -- log indexes
---CREATE INDEX log_transaction_id_idx ON "log" ("transaction_id");
 CREATE INDEX log_transaction_hash_idx ON "log" ("transaction_hash");
 CREATE INDEX log_address_idx ON "log" ("address");

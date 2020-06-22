@@ -35,14 +35,28 @@ class Database {
 	}
 
 	async connect(callback) {
-		return this.getPool().connect((err, client, release) => {
-			if (err) {
-				log.error('Error acquiring client', err.stack);
+		let connectCallback = null;
+		if (callback && typeof callback === 'function') {
+			connectCallback = (err, client, release) => {
+				if (err) {
+					log.error('Error acquiring client', err.stack);
+					process.exit(1);
+				}
+
+				callback(new Client(client, release), release);
+			};
+
+			return this.getPool().connect(connectCallback)
+		} else {
+			let client = await this.getPool().connect();
+
+			if (!client) {
+				log.error('Error acquiring client');
 				process.exit(1);
 			}
 
-			callback(new Client(client, release), release);
-		});
+			return new Client(client, client.release);
+		}
 	}
 }
 

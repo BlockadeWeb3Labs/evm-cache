@@ -188,6 +188,24 @@ class TransactionQueries {
 			]
 		}
 	}
+
+	static getTransactionLogs(
+		transaction_hash
+	) {
+		return {
+			text: `
+				SELECT
+					*
+				FROM
+					log
+				WHERE
+					transaction_hash = $1
+			`,
+			values: [
+				hexToBytea(transaction_hash)
+			]
+		}
+	}
 }      
 
 module.exports = TransactionQueries;
