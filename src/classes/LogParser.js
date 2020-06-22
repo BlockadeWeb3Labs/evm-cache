@@ -21,7 +21,7 @@ class LogParser {
 					return false;
 				}
 
-				let events = await this.decodeLogs(result.rows);
+				let events = this.decodeLogs(result.rows);
 
 				callback({
 					hash,
@@ -31,15 +31,19 @@ class LogParser {
 		});
 	}
 
-	async decodeLogs(txLogs) {
+	decodeLogs(txLogs) {
 		let decodedLogs = {};
 		for (let txLog of txLogs) {
-			decodedLogs[txLog.log_id] = this.decodeLog(
+			let event = this.decodeLog(
 				txLog.abi,
 				txLog.standard,
 				byteaBufferToHex(txLog.data),
 				this.pullTopics(txLog)
 			);
+
+			if (event) {
+				decodedLogs[txLog.log_id] = event;
+			}
 		}
 
 		return decodedLogs;

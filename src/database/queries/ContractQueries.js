@@ -95,11 +95,20 @@ class ContractQueries {
 		return {
 			text: `
 				SELECT
-					*
+					b.number AS created_block,
+					b.hash AS created_block_hash,
+					t.hash AS created_transaction_hash,
+					cm.*
 				FROM
-					contract_meta
+					transaction t
+				JOIN
+					block b ON
+						b.hash = t.block_hash
+				LEFT JOIN
+					contract_meta cm ON
+						cm.address = t.contract_address
 				WHERE
-					address = $1;
+					t.contract_address = $1;
 			`,
 			values: [
 				hexToBytea(address)
@@ -131,7 +140,7 @@ class ContractQueries {
 					standard = CASE WHEN EXCLUDED.standard IS NOT NULL THEN EXCLUDED.standard ELSE contract_meta.standard END,
 					abi      = CASE WHEN EXCLUDED.abi      IS NOT NULL THEN EXCLUDED.abi      ELSE contract_meta.abi      END,
 					name     = CASE WHEN EXCLUDED.name     IS NOT NULL THEN EXCLUDED.name     ELSE contract_meta.name     END,
-					symbol   = CASE WHEN EXCLUDED.symbol   IS NOT NULL THEN EXCLUDED.symbol   ELSE contract_meta.symbol   END
+					symbol   = CASE WHEN EXCLUDED.symbol   IS NOT NULL THEN EXCLUDED.symbol   ELSE contract_meta.symbol   END;
 			`,
 			values: [
 				hexToBytea(address),

@@ -211,6 +211,41 @@ class TransactionQueries {
 			]
 		}
 	}
+
+	static getTransactionLogsByContract(
+		address,
+		start_block,
+		end_block
+	) {
+		return {
+			text: `
+				SELECT
+					l.*,
+					cm.standard,
+					cm.abi
+				FROM
+					log l
+				JOIN
+					transaction t ON
+						t.hash = l.transaction_hash
+				JOIN
+					block b ON
+						b.hash = t.block_hash AND
+						b.number >= $2 AND
+						b.number < $3
+				LEFT JOIN
+					contract_meta cm ON
+						cm.address = l.address
+				WHERE
+					l.address = $1
+			`,
+			values: [
+				hexToBytea(address),
+				start_block,
+				end_block
+			]
+		}
+	}
 }      
 
 module.exports = TransactionQueries;
