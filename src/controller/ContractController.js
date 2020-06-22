@@ -70,7 +70,7 @@ class ContractController {
 					process.exit(1);
 				}
 
-				latest_block_number = result.rows[0].number;
+				latest_block_number = parseInt(result.rows[0].number, 10);
 				log.info(`Latest block found: ${latest_block_number}`);
 
 				getContractMeta.call(this);
@@ -80,7 +80,7 @@ class ContractController {
 			async function getContractMeta() {
 				Client.query(ContractQueries.getContractMeta(address), (result) => {
 					// No recent event found
-					if (!result.rowCount) {
+					if (!result.rowCount || !result.rows[0].contract_meta_id) {
 						if (ranSetStandard) {
 							Client.release();
 							console.error(`Trying to set contract standard multiple times for ${address}`);
@@ -126,7 +126,7 @@ class ContractController {
 					end_block = start_block + block_limit;
 
 					// Temporary, just end at some point
-					if (end_block >= latest_block_number) {
+					if (start_block >= latest_block_number) {
 						Client.release();
 						return callback();
 					}
