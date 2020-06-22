@@ -116,6 +116,7 @@ class ContractController {
 				});
 			};
 
+			let heartbeat_count = 0;
 			async function backfill(address, start_block, end_block) {
 				Client.query(TransactionQueries.getTransactionLogsByContract(
 					address,
@@ -124,6 +125,10 @@ class ContractController {
 				), async (result) => {
 					start_block = end_block;
 					end_block = start_block + block_limit;
+
+					if (heartbeat_count++ % 20 === 0) {
+						log.info(`Heartbeat between blocks ${start_block} to ${end_block}`);
+					}
 
 					// Temporary, just end at some point
 					if (start_block >= latest_block_number) {
