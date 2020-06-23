@@ -15,6 +15,7 @@ CREATE INDEX event_name_idx ON "event" ("name");
 CREATE TABLE event_transfer (
 	"event_transfer_id" BIGSERIAL PRIMARY KEY,
 	"event_id"          BIGINT REFERENCES "event" (event_id) ON DELETE CASCADE NOT NULL,
+	"contract_address"  BYTEA,
 	"to"                BYTEA,
 	"from"              BYTEA,
 	"id"                NUMERIC,

@@ -15,13 +15,43 @@ class EventQueries {
 				VALUES (
 					$1, $2, $3
 				)
-				ON CONFLICT (log_id)
-				DO NOTHING;
+				ON CONFLICT DO NOTHING
+				RETURNING *;
 			`,
 			values: [
 				log_id,
 				name,
 				result
+			]
+		}
+	}
+
+	static insertEventTransfer(
+		event_id,
+		contract_address,
+		_to,
+		_from,
+		id,
+		value
+	) {
+		return {
+			text: `
+				INSERT INTO
+					event_transfer (
+						event_id, contract_address, "to", "from", id, value
+					)
+				VALUES (
+					$1, $2, $3, $4, $5, $6
+				)
+				ON CONFLICT DO NOTHING;
+			`,
+			values: [
+				event_id,
+				hexToBytea(contract_address),
+				hexToBytea(_to),
+				hexToBytea(_from),
+				id,
+				value
 			]
 		}
 	}

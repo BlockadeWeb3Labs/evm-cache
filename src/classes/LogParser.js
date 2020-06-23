@@ -43,6 +43,7 @@ class LogParser {
 
 			if (event) {
 				decodedLogs[txLog.log_id] = event;
+				decodedLogs[txLog.log_id].contract_address = txLog.address;
 			}
 		}
 

@@ -17,7 +17,7 @@ class CacheMonitor {
 		this.reviewBlockLimit = 15;
 		this.comprehensiveReviewBlockLimit = 100;
 		this.comprehensiveReviewCounter = 0;
-		this.comprehensiveReviewCountMod = 100;
+		this.comprehensiveReviewCountMod = 250;
 	}
 
 	async start() {

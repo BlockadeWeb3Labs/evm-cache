@@ -45,17 +45,70 @@ class ContractController {
 				for (let log_id in events.events) {
 					if (!events.events.hasOwnProperty(log_id)) continue;
 
-					await Client.query(EventQueries.insertEvent(
+					await this.insertEvent(
+						Client,
 						log_id,
+						events.events[log_id].contract_address,
 						events.events[log_id].name,
 						events.events[log_id].result
-					));
+					);
 				}
 
 				Client.release();
 				callback();
 			});
 		});
+	}
+
+	async insertEvent(Client, log_id, contract_address, name, result) {
+		let res = await Client.query(EventQueries.insertEvent(
+			log_id,
+			name,
+			result
+		));
+
+		if (!res || !res.rowCount) {
+			log.error(`Could not add event per log ${log_id}`);
+			process.exit(1);
+		}
+
+		// Add transfer events to a dedicated log
+		if (name === 'Transfer') {
+			let event_id = res.rows[0].event_id;
+
+			await Client.query(EventQueries.insertEventTransfer(
+				event_id,
+				contract_address,
+				result.to,
+				result.from,
+				result.tokenId,
+				result.value
+			));
+		} else if (name === 'TransferSingle') {
+			let event_id = res.rows[0].event_id;
+
+			await Client.query(EventQueries.insertEventTransfer(
+				event_id,
+				contract_address,
+				result._to,
+				result._from,
+				result._id,
+				result._amount
+			));
+		} else if (name === 'TransferBatch') {
+			let event_id = res.rows[0].event_id;
+
+			for (let idx = 0; idx < result._ids.length; idx++) {
+				await Client.query(EventQueries.insertEventTransfer(
+					event_id,
+					contract_address,
+					result._to,
+					result._from,
+					result._ids[idx],
+					result._amounts[idx]
+				));
+		    }
+		}
 	}
 
 	backfillContractLogs(blockchain_id, address, block_limit, callback = ()=>{}) {
@@ -150,11 +203,13 @@ class ContractController {
 					for (let log_id in events) {
 						if (!events.hasOwnProperty(log_id)) continue;
 
-						await Client.query(EventQueries.insertEvent(
+						await this.insertEvent(
+							Client,
 							log_id,
+							events[log_id].contract_address,
 							events[log_id].name,
 							events[log_id].result
-						));
+						);
 					}
 
 					return backfill.call(this, address, start_block, end_block);
