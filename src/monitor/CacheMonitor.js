@@ -100,6 +100,8 @@ class CacheMonitor {
 						return this.getBlock(parseInt(block_number, 10));
 					});
 				});
+
+				return;
 			}
 
 			log.info(`At block #${block.number}`);
