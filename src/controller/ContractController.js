@@ -123,17 +123,16 @@ class ContractController {
 					start_block,
 					end_block
 				), async (result) => {
+					if (start_block >= latest_block_number) {
+						Client.release();
+						return callback();
+					}
+
 					start_block = end_block;
 					end_block = start_block + block_limit;
 
 					if (heartbeat_count++ % 20 === 0) {
 						log.info(`Heartbeat between blocks ${start_block} to ${end_block}`);
-					}
-
-					// Temporary, just end at some point
-					if (start_block >= latest_block_number) {
-						Client.release();
-						return callback();
 					}
 
 					if (!result.rowCount) {

@@ -167,7 +167,8 @@ class BlockQueries {
 					$2,
 					$3
 				)
-				ON CONFLICT DO NOTHING
+				ON CONFLICT (hash) DO UPDATE SET
+					nibling_block_hash = EXCLUDED.nibling_block_hash
 				RETURNING *;
 			`,
 			values: [
@@ -202,6 +203,29 @@ class BlockQueries {
 			values: [
 				blockchain_id,
 				number
+			]
+		}
+	}
+
+	static getBlockByHash(
+		blockchain_id,
+		hash
+	) {
+		return {
+			text: `
+				SELECT
+					b.*,
+					t_count.count AS transaction_count
+				FROM
+					block b,
+					(SELECT COUNT(*) FROM transaction WHERE block_hash = $2) t_count
+				WHERE
+					b.blockchain_id = $1 AND
+					b.hash = $2;
+			`,
+			values: [
+				blockchain_id,
+				hexToBytea(hash)
 			]
 		}
 	}

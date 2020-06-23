@@ -1,6 +1,7 @@
 const log = require('loglevel');
 const Database = require('../database/Database.js');
 const sleep = require('../util/sleep.js');
+const byteaBufferToHex = require('../util/byteaBufferToHex.js');
 
 const BlockQueries = require('../database/queries/BlockQueries.js');
 const TransactionQueries = require('../database/queries/TransactionQueries.js');
@@ -12,6 +13,11 @@ class CacheMonitor {
 		this.startBlockOverride = options.startBlockOverride;
 		this.endBlockOverride = options.endBlockOverride;
 		this.Client = null; // Covered in start()
+
+		this.reviewBlockLimit = 15;
+		this.comprehensiveReviewBlockLimit = 100;
+		this.comprehensiveReviewCounter = 0;
+		this.comprehensiveReviewCountMod = 100;
 	}
 
 	async start() {
@@ -36,7 +42,7 @@ class CacheMonitor {
 				// so we can stop and start without missing data in-between
 				await this.flushBlock(latest_number);
 
-				this.getBlock(latest_number);
+				this.mainLoop(latest_number);
 			});
 		});
 	}
@@ -49,7 +55,7 @@ class CacheMonitor {
 			block_number
 		));
 
-		log.info("Logs deleted");
+		log.info("Logs deleted, cascading to events and related tables");
 
 		await this.Client.query(TransactionQueries.deleteTransactions(
 			this.blockchain_id,
@@ -73,38 +79,110 @@ class CacheMonitor {
 		log.info("Completed flushing", block_number);
 	}
 
-	async getBlock(block_number) {
+	async mainLoop(block_number) {
 		if (this.endBlockOverride !== false && block_number >= this.endBlockOverride) {
 			log.info("Reached endBlockOverride:", this.endBlockOverride);
 			process.exit();
 		}
 
+		this.getBlock(block_number, {
+			'atBlockchainHead' : async (block_number) => {
+				//log.debug("No block found:", block_number);
+
+				// Go back and review the last N blocks
+				if (++this.comprehensiveReviewCounter % this.comprehensiveReviewCountMod === 0) {
+					log.info(`Performing a comprehensive review of the last ${this.comprehensiveReviewBlockLimit} blocks.`);
+
+					for (
+						let prior_block_number = block_number - this.comprehensiveReviewBlockLimit;
+						prior_block_number < block_number - 1;
+						prior_block_number++
+					) {
+						this.getBlock.call(this, prior_block_number);
+					}
+
+					// Wait before checking for the next block
+					await sleep(15000);
+				} else {
+					for (
+						let prior_block_number = block_number - this.reviewBlockLimit;
+						prior_block_number < block_number - 1;
+						prior_block_number++
+					) {
+						this.getBlock.call(this, prior_block_number, {
+							'foundDuringReviewBlock' : async (block_number, block_hash) => {
+								log.info(`* Found new previous block at number ${block_number}: ${block_hash}`);
+							}
+						});
+					}
+
+					// Wait before checking for the next block
+					await sleep(2500);
+				}
+
+
+				// Try this block again
+				return this.mainLoop(parseInt(block_number, 10));
+			},
+			'blockAlreadyExists' : async (block_number, block_hash) => {
+				// Move to the next block
+				log.info(`Block with hash ${block_hash} found, skipping.`);
+				this.mainLoop(parseInt(block_number, 10) + 1);
+			},
+			'moveToNextBlock' : async (block_number) => {
+				// Move to the next block
+				this.mainLoop(parseInt(block_number, 10) + 1);
+			}
+		});
+	}
+
+	async getBlock(block_number, callbacks = {}) {
 		this.evmClient.getBlock(block_number, async (err, block) => {
 			if (err) {
 				log.error("Error:", err);
 				process.exit(1);
 			} else if (!block) {
-				log.debug("No block found:", block_number);
-
-				// Release the client for a bit
-				this.Client.release();
-
-				// Wait before checking for the next block
-				await sleep(5000);
-
-				Database.connect((Client) => {
-					Client.query(BlockQueries.getLatestBlock(this.blockchain_id), async (result) => {
-						this.Client = Client;
-
-						// Try this block again
-						return this.getBlock(parseInt(block_number, 10));
-					});
-				});
+				if (callbacks.hasOwnProperty('atBlockchainHead')) {
+					callbacks.atBlockchainHead.call(this, block_number);
+				}
 
 				return;
 			}
 
-			log.info(`At block #${block.number}`);
+			// Make sure that we haven't already stored this block & make sure tx count is valid
+			let checkRes = await this.Client.query(BlockQueries.getBlockByHash(
+				this.blockchain_id, block.hash
+			));
+
+			if (checkRes && checkRes.rowCount) {
+				if (block.transactions.length === parseInt(checkRes.rows[0].transaction_count, 10)) {
+					// Everything is in order, ignore and move on
+					if (callbacks.hasOwnProperty('blockAlreadyExists')) {
+						callbacks.blockAlreadyExists.call(this, block_number, block.hash);
+					}
+				} else {
+					// Maybe delete any ommer that mentions this?
+					// Or do we add a flag to block that says "selected block"?
+					// Alternatively, just taking whatever the current head is in the database
+					// should give us all the information we need, unless we have an attack that
+					// reorgs beyond the regular number of blocks within a given timeframe
+					log.info(`At a re-instated block, #${block_number}, restoring data. Previous transaction count: ${checkRes.rows[0].transaction_count}, expected: ${block.transactions.length}`);
+
+					// Go ahead and store all of the data all over again, which
+					// migrates any moved data back to the de-facto block
+					storeBlockAssocData.call(this, block);
+				}
+
+				// Stop here.
+				return;
+
+			} else {
+				if (callbacks.hasOwnProperty('foundDuringReviewBlock')) {
+					callbacks.foundDuringReviewBlock.call(this, block_number, block.hash);
+				} else {
+					log.info(`Found new block at #${block.number}`);
+				}
+			}
 
 			// Save the block
 			this.Client.query(BlockQueries.addBlock(
@@ -135,40 +213,47 @@ class CacheMonitor {
 					process.exit(1);
 				}
 
-				// Queue up all of the tasks
-				let promises = [];
-
-				// Use a transaction for all of the promises
-				await this.Client.query('BEGIN;');
-
-				// Insert any ommers
-				if (block.uncles && block.uncles.length) {
-					promises.push(this.addOmmers(block.hash, block.uncles));
-				}
-
-				for (let idx = 0; idx < block.transactions.length; idx++) {
-					promises.push(this.getTransaction(block.hash, block.transactions[idx]));
-				}
-
-				Promise.all(promises).then(async values => {
-					// Commit the transaction for all of the promises
-					await this.Client.query('COMMIT;');
-
-					// Move to the next block
-					this.getBlock(parseInt(block.number, 10) + 1);
-				}).catch(async error => {
-					// Rollback the transaction for all of the promises
-					await this.Client.query('ROLLBACK;');
-
-					log.error('Promises failed for retrieving all block data');
-					log.error('Error:');
-					log.error(error);
-					log.error('Error Message:');
-					log.error(error.message);
-					process.exit(1);
-				});
+				storeBlockAssocData.call(this, block);
 			});
 		});
+
+		async function storeBlockAssocData(block) {
+			// Queue up all of the tasks
+			let promises = [];
+
+			// Use a transaction for all of the promises
+			await this.Client.query('BEGIN;');
+
+			// Insert any ommers
+			if (block.uncles && block.uncles.length) {
+				promises.push(this.addOmmers(block.hash, block.uncles));
+			}
+
+			for (let idx = 0; idx < block.transactions.length; idx++) {
+				promises.push(this.getTransaction(block.hash, block.transactions[idx]));
+			}
+
+			Promise.all(promises).then(async values => {
+				// Commit the transaction for all of the promises
+				await this.Client.query('COMMIT;');
+
+				if (callbacks.hasOwnProperty('moveToNextBlock')) {
+					callbacks.moveToNextBlock.call(this, block.number);
+				}
+
+				return;
+			}).catch(async error => {
+				// Rollback the transaction for all of the promises
+				await this.Client.query('ROLLBACK;');
+
+				log.error('Promises failed for retrieving all block data');
+				log.error('Error:');
+				log.error(error);
+				log.error('Error Message:');
+				log.error(error.message);
+				process.exit(1);
+			});
+		}
 	}
 
 	async addOmmers(nibling_block_hash, ommers) {
@@ -189,6 +274,24 @@ class CacheMonitor {
 
 	async getTransaction(block_hash, transaction) {
 		let receipt = await this.evmClient.getTransactionReceipt(transaction.hash);
+
+		if (!receipt) {
+			log.info(`Transaction receipt not found for block. Dropping out to be re-inserted at a later iteration.\n\tBlock hash: ${block_hash}\n\tTX hash: ${transaction.hash}`);
+			return;
+		}
+
+		// This is only for testing
+		// We don't actually need this for anything
+		/*
+			// Make sure that we haven't already stored this block
+			let checkRes = await this.Client.query(TransactionQueries.getTransactionByHash(
+				transaction.hash
+			));
+
+			if (checkRes && checkRes.rowCount) {
+				log.info(`Found transaction already included in original block ${byteaBufferToHex(checkRes.rows[0].block_hash)}, moving to ${block_hash}`);
+			}
+		*/
 
 		// Add the transaction
 		let result = await this.Client.query(TransactionQueries.addTransaction(
@@ -220,6 +323,14 @@ class CacheMonitor {
 		if (!receipt.logs || !receipt.logs.length) {
 			return;
 		}
+
+		// First we delete the logs in case we have to update them
+		// There's no easier way for us to identify logs that have to be "updated"
+		// based on the transaction being included in another block -- this changes
+		// the log_index, so it's better to just wipe the associated logs and re-insert
+		// ALSO, doing this will cascade all log row deletes to the associated event
+		// tables that we're using for parsed logs
+		await this.Client.query(TransactionQueries.deleteLogsByTransactionHash(transaction.hash));
 
 		// Add the logs
 		for (let idx = 0; idx < receipt.logs.length; idx++) {

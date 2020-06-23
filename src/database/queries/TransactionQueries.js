@@ -55,7 +55,21 @@ class TransactionQueries {
 					$14,
 					$15
 				)
-				ON CONFLICT DO NOTHING
+				ON CONFLICT (hash) DO UPDATE SET
+					block_hash = EXCLUDED.block_hash,
+					nonce = EXCLUDED.nonce,
+					transaction_index = EXCLUDED.transaction_index,
+					"from" = EXCLUDED.from,
+					"to" = EXCLUDED.to,
+					value = EXCLUDED.value,
+					gas_price = EXCLUDED.gas_price,
+					gas = EXCLUDED.gas,
+					input = EXCLUDED.input,
+					status = EXCLUDED.status,
+					contract_address = EXCLUDED.contract_address,
+					v = EXCLUDED.v,
+					r = EXCLUDED.r,
+					s = EXCLUDED.s
 				RETURNING *;
 			`,
 			values: [
@@ -126,6 +140,22 @@ class TransactionQueries {
 		}
 	}
 
+	static deleteLogsByTransactionHash(
+		transaction_hash
+	) {
+		return {
+			text: `
+				DELETE FROM
+					log
+				WHERE
+					transaction_hash = $1;
+			`,
+			values: [
+				transaction_hash
+			]
+		}
+	}
+
 	static deleteLogs(
 		blockchain_id,
 		number
@@ -141,7 +171,7 @@ class TransactionQueries {
 						FROM
 							transaction
 						WHERE
-							block_hash = (
+							block_hash IN (
 								SELECT
 									hash
 								FROM
@@ -149,8 +179,6 @@ class TransactionQueries {
 								WHERE
 									blockchain_id = $1 AND
 									number = $2
-								LIMIT
-									1
 							)
 					);
 			`,
@@ -185,6 +213,24 @@ class TransactionQueries {
 			values: [
 				blockchain_id,
 				number
+			]
+		}
+	}
+
+	static getTransactionByHash(
+		transaction_hash
+	) {
+		return {
+			text: `
+				SELECT
+					*
+				FROM
+					transaction
+				WHERE
+					hash = $1
+			`,
+			values: [
+				hexToBytea(transaction_hash)
 			]
 		}
 	}
