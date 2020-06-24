@@ -4,14 +4,14 @@ const ContractController = require(__dirname + '/../controller/ContractControlle
 
 if (!argv.hasOwnProperty('address')) {
 	log.error("Incorrect arguments for tool:");
-	log.error("\tnode evaluateContract.js --address [contract address]")
+	log.error("\tnode setContract.js --address [contract address] (optional)--abi [contract abi string]")
 	process.exit(1);
 }
 
-(async (address) => {
+(async (address, abi = null) => {
 	const cc = new ContractController();
-	cc.setContractMetadata(address, () => {
+	cc.setContractMetadata(address, abi, () => {
 		console.log("Done.");
 		process.exit();
 	});
-})(argv.address);
+})(argv.address, argv.abi);

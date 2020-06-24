@@ -60,11 +60,24 @@ class LogParser {
 		return topics;
 	}
 
+	pullEventSignatures(abi) {
+		// Pull all event signatures
+		let eventSignatures = {};
+
+		for (let f of abi) {
+			if (f.type === 'event') {
+				eventSignatures[f.name] = this.web3.eth.abi.encodeEventSignature(f);
+			}
+		}
+
+		return eventSignatures;
+	}
+
 	decodeLog(abi, standard, data, topics) {
 		let signatures = {};
 		if (abi && typeof abi === 'object' && Object.keys(abi).length > 0) {
 			// ABI
-			signatures = {};
+			signatures = this.pullEventSignatures(abi);
 		} else if (typeof standard === 'string' && standard.length) {
 			// Standard
 			signatures = abiCfg.eventSignatures[standard];

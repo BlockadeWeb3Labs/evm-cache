@@ -13,7 +13,7 @@ const LogParser = require(__dirname + '/../classes/LogParser.js');
 class ContractController {
 	constructor() {}
 
-	setContractMetadata(address, callback = ()=>{}) {
+	setContractMetadata(address, abi = null, callback = ()=>{}) {
 		const ci = new ContractIdentifier();
 		ci.determineStandard(address, (res) => {
 			if (!res.standard) {
@@ -21,20 +21,27 @@ class ContractController {
 				return;
 			}
 
-			ci.getNameSymbol(address, (res) => {
-				Database.connect((Client) => {
-					Client.query(ContractQueries.upsertContractMeta(
-						address,
-						res.standard,
-						null,
-						res.name || null,
-						res.symbol || null
-					), (result) => {
-						Client.release();
-						callback();
-					});
+			Database.connect((Client) => {
+				Client.query(ContractQueries.upsertContractMeta(
+					address,
+					res.standard
+				), () => {
+
+					// Now get the name and symbol, if available
+					ci.getNameSymbol(address, (res) => {
+						Client.query(ContractQueries.upsertContractMeta(
+							address,
+							res.standard,
+							abi,
+							res.name || null,
+							res.symbol || null
+						), (result) => {
+							Client.release();
+							callback();
+						});
+					})
 				});
-			})
+			});
 		});
 	}
 
@@ -120,10 +127,10 @@ class ContractController {
 			await Client.query(EventQueries.insertEventTransfer(
 				event_id,
 				contract_address,
-				result.to,
-				result.from,
-				result.tokenId,
-				result.value
+				result.to      || result._to,
+				result.from    || result._from,
+				result.tokenId || result._tokenId,
+				result.value   || result._value
 			));
 		} else if (name === 'TransferSingle') {
 			let event_id = res.rows[0].event_id;
@@ -183,7 +190,7 @@ class ContractController {
 
 						// Need to add the contract
 						contractMetaSet = true;
-						this.setContractMetadata(address, getContractMeta.bind(this));
+						this.setContractMetadata(address, null, getContractMeta.bind(this));
 					} else {
 						getMostRecentContractEvent.call(this, result.rows[0]);
 					}
