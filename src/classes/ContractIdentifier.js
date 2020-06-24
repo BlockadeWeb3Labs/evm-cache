@@ -2,12 +2,78 @@ const log = require('loglevel');
 const Web3 = require('web3');
 const abiCfg = require('../config/abi.js');
 const Database = require('../database/Database.js');
+const EthereumClient = require('evm-chain-monitor').EthereumClient;
+const BlockchainQueries = require('../database/queries/BlockchainQueries.js');
 const ContractQueries = require('../database/queries/ContractQueries.js');
 const byteaBufferToHex = require('../util/byteaBufferToHex.js');
 
 class ContractIdentifier {
 	constructor() {
 		this.web3 = new Web3();
+	}
+
+	async getNameSymbol(address, callback = ()=>{}) {
+		Database.connect((Client) => {
+			Client.query(BlockchainQueries.getBlockchainsAndNodes(), async (result) => {
+				if (!result || !result.rowCount) {
+					Client.release();
+					log.error('No blockchain nodes found in database.');
+					return callback({address});
+				}
+
+				// ASSUMPTION: We're only going to watch one node at a time
+				// But the SQL is built to handle multiple nodes and blockchains.
+				// Regardless, one per at the moment
+				let node = result.rows[0];
+
+				// ASSUMPTION: We're only supporting Ethereum right now
+				// Create a new monitor instance
+				let ethClient = new EthereumClient({
+					"endpoint" : node.endpoint
+				});
+
+				Client.query(ContractQueries.getContractMeta(address), async (result) => {
+					Client.release();
+
+					if (!result || !result.rowCount || !result.rows[0].contract_meta_id) {
+						log.error(`No contract metadata found for ${address}`);
+						return callback({address});
+					}
+
+					let abi, record = result.rows[0];
+					if (record.abi && typeof record.abi === 'object' && Object.keys(record.abi).length > 0) {
+						abi = record.abi;
+					} else if (typeof record.standard === 'string' && record.standard.length) {
+						abi = abiCfg.abis[record.standard];
+					} else {
+						// Nothing to use
+						log.debug("No valid ABI or standard provided to decode log.");
+						return callback({address});
+					}
+
+					// Determine if we have a name function
+					const contract = new ethClient.web3.eth.Contract(abi, address);
+					let name, symbol;
+					try {
+						name = await contract.methods.name().call();
+					} catch (ex) {
+						log.error(`Could not retrieve name for ${address}`);
+					}
+
+					try {
+						symbol = await contract.methods.symbol().call();
+					} catch (ex) {
+						log.error(`Could not retrieve symbol for ${address}`);
+					}
+
+					callback({
+						address,
+						name,
+						symbol
+					});
+				});
+			});
+		});
 	}
 
 	async determineStandard(address, callback = ()=>{}) {

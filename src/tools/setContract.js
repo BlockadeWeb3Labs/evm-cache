@@ -9,8 +9,8 @@ if (!argv.hasOwnProperty('address')) {
 }
 
 (async (address) => {
-	const ci = new ContractController();
-	ci.setStandard(address, () => {
+	const cc = new ContractController();
+	cc.setContractMetadata(address, () => {
 		console.log("Done.");
 		process.exit();
 	});

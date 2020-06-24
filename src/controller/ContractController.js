@@ -13,7 +13,7 @@ const LogParser = require(__dirname + '/../classes/LogParser.js');
 class ContractController {
 	constructor() {}
 
-	setStandard(address, callback = ()=>{}) {
+	setContractMetadata(address, callback = ()=>{}) {
 		const ci = new ContractIdentifier();
 		ci.determineStandard(address, (res) => {
 			if (!res.standard) {
@@ -21,15 +21,20 @@ class ContractController {
 				return;
 			}
 
-			Database.connect((Client) => {
-				Client.query(ContractQueries.upsertContractMeta(
-					address,
-					res.standard
-				), (result) => {
-					Client.release();
-					callback();
+			ci.getNameSymbol(address, (res) => {
+				Database.connect((Client) => {
+					Client.query(ContractQueries.upsertContractMeta(
+						address,
+						res.standard,
+						null,
+						res.name || null,
+						res.symbol || null
+					), (result) => {
+						Client.release();
+						callback();
+					});
 				});
-			});
+			})
 		});
 	}
 
@@ -104,8 +109,8 @@ class ContractController {
 		));
 
 		if (!res || !res.rowCount) {
-			log.error(`Could not add event per log ${log_id}`);
-			process.exit(1);
+			log.debug(`Could not add event per log ${log_id}`);
+			return;
 		}
 
 		// Add transfer events to a dedicated log
@@ -165,20 +170,20 @@ class ContractController {
 				getContractMeta.call(this);
 			});
 
-			let ranSetStandard = false;
+			let contractMetaSet = false;
 			async function getContractMeta() {
 				Client.query(ContractQueries.getContractMeta(address), (result) => {
 					// No recent event found
 					if (!result.rowCount || !result.rows[0].contract_meta_id) {
-						if (ranSetStandard) {
+						if (contractMetaSet) {
 							Client.release();
 							console.error(`Trying to set contract standard multiple times for ${address}`);
 							process.exit(1);
 						}
 
 						// Need to add the contract
-						ranSetStandard = true;
-						this.setStandard(address, getContractMeta.bind(this));
+						contractMetaSet = true;
+						this.setContractMetadata(address, getContractMeta.bind(this));
 					} else {
 						getMostRecentContractEvent.call(this, result.rows[0]);
 					}
