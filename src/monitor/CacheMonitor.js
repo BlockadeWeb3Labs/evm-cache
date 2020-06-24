@@ -6,6 +6,8 @@ const byteaBufferToHex = require('../util/byteaBufferToHex.js');
 const BlockQueries = require('../database/queries/BlockQueries.js');
 const TransactionQueries = require('../database/queries/TransactionQueries.js');
 
+const ContractController = require('../controller/ContractController.js');
+
 class CacheMonitor {
 	constructor(options) {
 		this.blockchain_id = options.blockchain_id;
@@ -18,6 +20,8 @@ class CacheMonitor {
 		this.comprehensiveReviewBlockLimit = 100;
 		this.comprehensiveReviewCounter = 0;
 		this.comprehensiveReviewCountMod = 250;
+
+		this.cc = new ContractController();
 	}
 
 	async start() {
@@ -332,15 +336,22 @@ class CacheMonitor {
 		// tables that we're using for parsed logs
 		await this.Client.query(TransactionQueries.deleteLogsByTransactionHash(transaction.hash));
 
-		// Add the logs
+		// Add the logs & any events
 		for (let idx = 0; idx < receipt.logs.length; idx++) {
-			await this.Client.query(TransactionQueries.addLog(
+			let logResult = await this.Client.query(TransactionQueries.addLog(
 				transaction.hash,
 				receipt.logs[idx].logIndex,
 				receipt.logs[idx].address,
 				receipt.logs[idx].data,
 				...receipt.logs[idx].topics
 			));
+
+			if (!logResult || !logResult.rowCount) {
+				log.error(`** Could not store log with index ${receipt.logs[idx].logIndex} for transaction ${transaction.hash}`);
+				continue;
+			}
+
+			await this.cc.setDecodedLog(this.Client, logResult.rows[0].log_id, receipt.logs[idx]);
 		}
 	}
 }

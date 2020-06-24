@@ -33,11 +33,11 @@ class ContractController {
 		});
 	}
 
-	setDecodedLogs(transaction_hash, callback = ()=>{}) {
+	setDecodedLogsByTransaction(transaction_hash, callback = ()=>{}) {
 		const lp = new LogParser();
 		lp.decodeTransactionLogs(transaction_hash, (events) => {
 			if (!events.events || !Object.keys(events.events).length) {
-				log.info(`No events returned for transaction ${transaction_hash}`);
+				log.debug(`No events returned for transaction ${transaction_hash}`);
 				return;
 			}
 
@@ -58,6 +58,42 @@ class ContractController {
 				callback();
 			});
 		});
+	}
+
+	async setDecodedLog(Client, log_id, logReceipt) {
+		let contractMetaRes = await Client.query(ContractQueries.getContractMeta(logReceipt.address));
+
+		// If the contract meta record does not exist, move along
+		if (!contractMetaRes || !contractMetaRes.rowCount || !contractMetaRes.rows[0].contract_meta_id) {
+			return;
+		}
+
+		// Decode these logs
+		const lp = new LogParser();
+		let events = lp.decodeLogs([{
+			...logReceipt,
+			log_id,
+			'standard' : contractMetaRes.rows[0].standard,
+			'abi'      : contractMetaRes.rows[0].abi
+		}]);
+
+		if (!events || !Object.keys(events).length) {
+			return;
+		}
+
+		log.info(`Found ${Object.keys(events).length} log events for ${logReceipt.address}`);
+
+		for (let log_id in events) {
+			if (!events.hasOwnProperty(log_id)) continue;
+
+			await this.insertEvent(
+				Client,
+				log_id,
+				events[log_id].contract_address,
+				events[log_id].name,
+				events[log_id].result
+			);
+		}
 	}
 
 	async insertEvent(Client, log_id, contract_address, name, result) {

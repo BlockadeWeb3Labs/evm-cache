@@ -125,7 +125,8 @@ class TransactionQueries {
 					$7,
 					$8
 				)
-				ON CONFLICT DO NOTHING;
+				ON CONFLICT DO NOTHING
+				RETURNING log_id;
 			`,
 			values: [
 				hexToBytea(transaction_hash),

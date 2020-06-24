@@ -17,7 +17,7 @@ class LogParser {
 				Client.release();
 
 				if (!result.rowCount) {
-					log.error(`Transaction ${hash} does not have logs stored in the database.`);
+					log.debug(`Transaction ${hash} does not have logs stored in the database.`);
 					return false;
 				}
 
@@ -52,6 +52,7 @@ class LogParser {
 
 	pullTopics(txLog) {
 		let topics = [];
+		if (txLog.topics && txLog.topics.length) return txLog.topics;
 		if (txLog.topic_0) topics.push(byteaBufferToHex(txLog.topic_0));
 		if (txLog.topic_1) topics.push(byteaBufferToHex(txLog.topic_1));
 		if (txLog.topic_2) topics.push(byteaBufferToHex(txLog.topic_2));
@@ -70,7 +71,7 @@ class LogParser {
 			abi = abiCfg.abis[standard];
 		} else {
 			// Nothing to use
-			log.error("No valid ABI or standard provided to decode log.");
+			log.debug("No valid ABI or standard provided to decode log.");
 			return;
 		}
 

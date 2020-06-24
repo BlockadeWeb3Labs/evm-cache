@@ -10,7 +10,7 @@ if (!argv.hasOwnProperty('hash')) {
 
 (async (hash) => {
 	const ci = new ContractController();
-	ci.setDecodedLogs(hash, () => {
+	ci.setDecodedLogsByTransaction(hash, () => {
 		console.log("Done.");
 		process.exit();
 	});
