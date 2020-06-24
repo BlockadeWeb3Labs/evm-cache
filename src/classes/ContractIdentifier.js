@@ -101,7 +101,17 @@ class ContractIdentifier {
 				}
 
 				// Failing? Try to guess the standard by calling the contract
-				let call_results = await this.determineStandardByCall(address, false);
+				let call_results;
+				if (!standard) {
+					call_results = await this.determineStandardByCall(address, false);
+
+					if (call_results.length === 1) {
+						standard = call_results[0];
+					} else if (call_results.length > 1) {
+						log.error(`Ambiguous contract call analysis result for ${address}, returned ${call_results}`);
+						return false;
+					}
+				}
 
 				callback({
 					address,
@@ -180,7 +190,61 @@ class ContractIdentifier {
 	}
 
 	async determineStandardByCall(address, verbose = false) {
-		return false;
+		let Client = await Database.connect();
+		let result = await Client.query(BlockchainQueries.getBlockchainsAndNodes());
+		Client.release();
+
+		if (!result || !result.rowCount) {
+			log.error('No blockchain nodes found in database.');
+			return false;
+		}
+
+		// ASSUMPTION: We're only going to watch one node at a time
+		// But the SQL is built to handle multiple nodes and blockchains.
+		// Regardless, one per at the moment
+		let node = result.rows[0];
+
+		// ASSUMPTION: We're only supporting Ethereum right now
+		// Create a new monitor instance
+		let ethClient = new EthereumClient({
+			"endpoint" : node.endpoint
+		});
+
+		// Keep track of potential matches
+		let matches = abiCfg.contracts.slice();
+
+		for (let standard in abiCfg.abis) {
+			if (!abiCfg.abis.hasOwnProperty(standard)) continue;
+
+			const abi = abiCfg.abis[standard];
+
+			// Determine if we have a name function
+			const contract = new ethClient.web3.eth.Contract(abi, address);
+
+			// Determine which callable functions we're reviewing
+			const callables = abiCfg.callableFunctions[standard];
+
+			callable_loop:
+			for (let call in callables) {
+				if (!callables.hasOwnProperty(call)) continue;
+
+				try {
+					let res = await contract.methods[call](...callables[call]).call();
+					verbose && log.debug(`Received result for ${call}: ${res}`);
+
+					if (call === 'supportsInterface' && res === false) {
+						matches.splice(matches.indexOf(standard), 1);
+						break callable_loop;
+					}
+				} catch (ex) {
+					verbose && log.debug(`Could not retrieve call ${call} for ${address}`);
+					matches.splice(matches.indexOf(standard), 1);
+					break callable_loop;
+				}
+			}
+		}
+
+		return matches;
 	}
 }
 

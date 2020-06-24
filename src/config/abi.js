@@ -55,6 +55,21 @@ let functions = {
 	]
 };
 
+let callableFunctions = {
+	'erc20' : {
+		'name' : [],
+		'symbol' : [],
+		'decimals' : [],
+		'totalSupply' : []
+	},
+	'erc721' : {
+		'supportsInterface' : ['0x80ac58cd']
+	},
+	'erc1155' : {
+		'supportsInterface' : ['0xd9b67a26']
+	}
+};
+
 // Pull all event signatures
 let eventSignatures = {
 	'erc20'   : {},
@@ -79,6 +94,7 @@ module.exports = {
 	abis,
 	events,
 	functions,
+	callableFunctions,
 	eventSignatures,
 	getEventJson
 };
