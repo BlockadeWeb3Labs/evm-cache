@@ -17,14 +17,19 @@ class ContractController {
 		const ci = new ContractIdentifier();
 		ci.determineStandard(address, (res) => {
 			if (!res.standard) {
-				log.info(`No standard determined for ${address}`);
-				return;
+				if (abi && typeof abi === 'string' && abi.length > 0) {
+					log.info(`Using provided ABI for ${address}`);
+				} else {
+					log.info(`No standard determined for ${address}`);
+					return;
+				}
 			}
 
 			Database.connect((Client) => {
 				Client.query(ContractQueries.upsertContractMeta(
 					address,
-					res.standard
+					res.standard,
+					abi
 				), () => {
 
 					// Now get the name and symbol, if available
