@@ -164,7 +164,7 @@ class ContractController {
 		}
 	}
 
-	backfillContractLogs(blockchain_id, address, block_limit, callback = ()=>{}) {
+	backfillContractLogs(blockchain_id, address, block_limit, start_override, callback = ()=>{}) {
 		let latest_block_number = 0;
 
 		Database.connect(async (Client) => {
@@ -212,6 +212,11 @@ class ContractController {
 						start_block = parseInt(meta.created_block, 10);
 					} else {
 						start_block = parseInt(result.rows[0].block_number, 10);
+					}
+
+					// If we have an override
+					if (start_override && parseInt(start_override, 10) >= 0) {
+						start_block = parseInt(start_override, 10);
 					}
 
 					end_block = start_block + block_limit;
