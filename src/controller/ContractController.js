@@ -256,7 +256,7 @@ class ContractController {
 					end_block = start_block + block_limit;
 
 					if (heartbeat_count++ % 20 === 0) {
-						log.info(`Heartbeat between blocks ${start_block} to ${end_block}: ${this.stats.heartbeat_event_insert_count} events added in ${(Date.now()/1000-this.stats.heartbeat_event_insert_time).toLocaleString(5)} seconds`);
+						log.info(`Heartbeat between blocks ${start_block} to ${end_block}: ${this.stats.heartbeat_event_insert_count} events added in ${(Date.now()/1000-this.stats.heartbeat_event_insert_time).toLocaleString(5)} seconds -- at ${(start_block/latest_block_number*100).toLocaleString(2)}%`);
 						this.stats.heartbeat_event_insert_count = 0;
 						this.stats.heartbeat_event_insert_time = Date.now()/1000;
 					}
@@ -375,11 +375,11 @@ class ContractController {
 					start_log = end_log;
 					end_log = start_log + log_limit;
 
-					if (heartbeat_count++ % 20 === 0) {
+					if (heartbeat_count++ % 40 === 0) {
 						let res = await Client.query(TransactionQueries.getBlockNumberForTransactionLog(start_log));
 						let block_number = (res && res.rowCount && res.rows[0].number) || -1;
 
-						log.info(`Heartbeat at block ${block_number}, between logs ${start_log} to ${end_log}: ${this.stats.heartbeat_event_insert_count} events added in ${(Date.now()/1000-this.stats.heartbeat_event_insert_time).toLocaleString(5)} seconds`);
+						log.info(`Heartbeat at block ${block_number}, between logs ${start_log} to ${end_log}: ${this.stats.heartbeat_event_insert_count} events added in ${(Date.now()/1000-this.stats.heartbeat_event_insert_time).toLocaleString(5)} seconds -- at ${(start_log/latest_log_number*100).toLocaleString(2)}%`);
 						this.stats.heartbeat_event_insert_count = 0;
 						this.stats.heartbeat_event_insert_time = Date.now()/1000;
 					}
