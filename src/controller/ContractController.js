@@ -13,7 +13,8 @@ const LogParser = require(__dirname + '/../classes/LogParser.js');
 class ContractController {
 	constructor() {
 		this.stats = {
-			'heartbeat_event_insert_count' : 0
+			'heartbeat_event_insert_count' : 0,
+			'heartbeat_event_insert_time' : 0
 		};
 	}
 
@@ -232,6 +233,7 @@ class ContractController {
 					end_block = start_block + block_limit;
 
 					log.info(`Starting contract backfill on block ${start_block}`);
+					this.stats.heartbeat_event_insert_time = Date.now()/1000;
 
 					backfill.call(this, address, start_block, end_block);
 				});
@@ -253,8 +255,9 @@ class ContractController {
 					end_block = start_block + block_limit;
 
 					if (heartbeat_count++ % 20 === 0) {
-						log.info(`Heartbeat between blocks ${start_block} to ${end_block}: ${this.stats.heartbeat_event_insert_count} events added`);
+						log.info(`Heartbeat between blocks ${start_block} to ${end_block}: ${this.stats.heartbeat_event_insert_count} events added in ${(Date.now()/1000-this.stats.heartbeat_event_insert_time).toLocaleString(5)} seconds`);
 						this.stats.heartbeat_event_insert_count = 0;
+						this.stats.heartbeat_event_insert_time = Date.now()/1000;
 					}
 
 					if (!result.rowCount) {
