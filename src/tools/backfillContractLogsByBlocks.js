@@ -7,13 +7,13 @@ if (!argv.hasOwnProperty('blockchain_id') ||
 	!argv.hasOwnProperty('address')
 ) {
 	log.error("Incorrect arguments for tool:");
-	log.error("\tnode evaluateContract.js\n\t--blockchain_id [number]\n\t--block_limit [number of blocks to search]\n\t--address [contract address]\n\t(optional) --start [block number]")
+	log.error("\tnode backfillContractLogsByBlocks.js\n\t--blockchain_id [number]\n\t--block_limit [number of blocks to search]\n\t--address [contract address]\n\t(optional) --start [block number]")
 	process.exit(1);
 }
 
 (async (blockchain_id, address, block_limit, start = null) => {
 	const ci = new ContractController();
-	ci.backfillContractLogs(blockchain_id, address, block_limit, start, () => {
+	ci.backfillContractLogsByBlocks(blockchain_id, address, block_limit, start, () => {
 		console.log("Done.");
 		process.exit();
 	});

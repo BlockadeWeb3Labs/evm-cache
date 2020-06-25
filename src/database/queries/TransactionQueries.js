@@ -259,7 +259,7 @@ class TransactionQueries {
 		}
 	}
 
-	static getTransactionLogsByContract(
+	static getTransactionLogsByContractInBlockRange(
 		address,
 		start_block,
 		end_block
@@ -290,6 +290,75 @@ class TransactionQueries {
 				hexToBytea(address),
 				start_block,
 				end_block
+			]
+		}
+	}
+
+	static getTransactionLogsByContractInLogRange(
+		address,
+		start_log_id,
+		end_log_id
+	) {
+		return {
+			text: `
+				SELECT
+					l.*,
+					cm.standard,
+					cm.abi
+				FROM
+					log l
+				LEFT JOIN
+					contract_meta cm ON
+						cm.address = l.address
+				WHERE
+					l.address = $1 AND
+					l.log_id >= $2 AND
+					l.log_id < $3;
+			`,
+			values: [
+				hexToBytea(address),
+				start_log_id,
+				end_log_id
+			]
+		}
+	}
+
+	static getBlockNumberForTransactionLog(
+		log_id
+	) {
+		return {
+			text: `
+				SELECT
+					b.number
+				FROM
+					block b,
+					transaction t,
+					log l
+				WHERE
+					l.log_id = $1 AND
+					t.hash = l.transaction_hash AND
+					b.hash = t.block_hash;
+			`,
+			values: [
+				log_id
+			]
+		}
+	}
+
+	static getMaxLogForContract(
+		contract_address
+	) {
+		return {
+			text: `
+				SELECT
+					MAX(log_id)
+				FROM
+					log
+				WHERE
+					address = $1;
+			`,
+			values: [
+				hexToBytea(contract_address)
 			]
 		}
 	}

@@ -175,7 +175,7 @@ class ContractController {
 		}
 	}
 
-	backfillContractLogs(blockchain_id, address, block_limit, start_override, callback = ()=>{}) {
+	backfillContractLogsByBlocks(blockchain_id, address, block_limit, start_override, callback = ()=>{}) {
 		let latest_block_number = 0;
 
 		Database.connect(async (Client) => {
@@ -241,12 +241,13 @@ class ContractController {
 
 			let heartbeat_count = 0;
 			async function backfill(address, start_block, end_block) {
-				Client.query(TransactionQueries.getTransactionLogsByContract(
+				Client.query(TransactionQueries.getTransactionLogsByContractInBlockRange(
 					address,
 					start_block,
 					end_block
 				), async (result) => {
 					if (start_block >= latest_block_number) {
+						log.info(`Reached end at block ${latest_block_number}: ${this.stats.heartbeat_event_insert_count} events added in ${(Date.now()/1000-this.stats.heartbeat_event_insert_time).toLocaleString(5)} seconds`);
 						Client.release();
 						return callback();
 					}
@@ -285,6 +286,129 @@ class ContractController {
 					}
 
 					return backfill.call(this, address, start_block, end_block);
+
+				});
+			};
+		});
+	}
+
+	backfillContractLogsByLogs(blockchain_id, address, log_limit, start_override, callback = ()=>{}) {
+		let latest_log_number = 0;
+
+		Database.connect(async (Client) => {
+
+			// Kick it off
+			Client.query(TransactionQueries.getMaxLogForContract(address), (result) => {
+				if (!result.rowCount) {
+					log.error(`Unable to return max log`);
+					process.exit(1);
+				}
+
+				latest_log_number = parseInt(result.rows[0].max, 10);
+				log.info(`Latest log ID found: ${latest_log_number}`);
+
+				getContractMeta.call(this);
+			});
+
+			let contractMetaSet = false;
+			async function getContractMeta() {
+				Client.query(ContractQueries.getContractMeta(address), (result) => {
+					// No recent event found
+					if (!result.rowCount || !result.rows[0].contract_meta_id) {
+						if (contractMetaSet) {
+							Client.release();
+							console.error(`Trying to set contract standard multiple times for ${address}`);
+							process.exit(1);
+						}
+
+						// Need to add the contract
+						contractMetaSet = true;
+						this.setContractMetadata(address, null, getContractMeta.bind(this));
+					} else {
+						getMostRecentContractLog.call(this, result.rows[0]);
+					}
+				});
+			}
+
+			async function getMostRecentContractLog(meta) {
+				Client.query(TransactionQueries.getMaxLogForContract(address), async (result) => {
+					let start_log,
+						end_log;
+
+					// Start at the beginning
+					start_log = 1;
+
+					// If we have an override
+					if (start_override && parseInt(start_override, 10) >= 0) {
+						start_log = parseInt(start_override, 10);
+					}
+
+					end_log = start_log + log_limit;
+
+					// Get the lowest Log ID for this block
+					let res = await Client.query(TransactionQueries.getBlockNumberForTransactionLog(start_log));
+					let block_number = (res && res.rowCount && res.rows[0].number) || -1;
+
+					log.info(`Starting contract backfill on block ${block_number} at log ${start_log}`);
+					this.stats.heartbeat_event_insert_time = Date.now()/1000;
+
+					backfill.call(this, address, start_log, end_log);
+				});
+			};
+
+			let heartbeat_count = 0;
+			async function backfill(address, start_log, end_log) {
+				Client.query(TransactionQueries.getTransactionLogsByContractInLogRange(
+					address,
+					start_log,
+					end_log
+				), async (result) => {
+					if (start_log >= latest_log_number) {
+						let res = await Client.query(TransactionQueries.getBlockNumberForTransactionLog(latest_log_number));
+						let block_number = (res && res.rowCount && res.rows[0].number) || -1;
+
+						log.info(`Reached end at block ${block_number}, between logs ${start_log} to ${end_log}: ${this.stats.heartbeat_event_insert_count} events added in ${(Date.now()/1000-this.stats.heartbeat_event_insert_time).toLocaleString(5)} seconds`);
+						Client.release();
+						return callback();
+					}
+
+					start_log = end_log;
+					end_log = start_log + log_limit;
+
+					if (heartbeat_count++ % 20 === 0) {
+						let res = await Client.query(TransactionQueries.getBlockNumberForTransactionLog(start_log));
+						let block_number = (res && res.rowCount && res.rows[0].number) || -1;
+
+						log.info(`Heartbeat at block ${block_number}, between logs ${start_log} to ${end_log}: ${this.stats.heartbeat_event_insert_count} events added in ${(Date.now()/1000-this.stats.heartbeat_event_insert_time).toLocaleString(5)} seconds`);
+						this.stats.heartbeat_event_insert_count = 0;
+						this.stats.heartbeat_event_insert_time = Date.now()/1000;
+					}
+
+					if (!result.rowCount) {
+						return backfill.call(this, address, start_log, end_log);
+					}
+
+					// Decode these logs
+					const lp = new LogParser();
+					let events = lp.decodeLogs(result.rows);
+
+					if (!events || !Object.keys(events).length) {
+						return backfill.call(this, address, start_log, end_log);
+					}
+
+					for (let log_id in events) {
+						if (!events.hasOwnProperty(log_id)) continue;
+
+						await this.insertEvent(
+							Client,
+							log_id,
+							events[log_id].contract_address,
+							events[log_id].name,
+							events[log_id].result
+						);
+					}
+
+					return backfill.call(this, address, start_log, end_log);
 
 				});
 			};
