@@ -11,7 +11,11 @@ const ContractIdentifier = require('../classes/ContractIdentifier.js');
 const LogParser = require(__dirname + '/../classes/LogParser.js');
 
 class ContractController {
-	constructor() {}
+	constructor() {
+		this.stats = {
+			'heartbeat_event_insert_count' : 0
+		};
+	}
 
 	setContractMetadata(address, abi = null, callback = ()=>{}) {
 		const ci = new ContractIdentifier();
@@ -114,6 +118,10 @@ class ContractController {
 	}
 
 	async insertEvent(Client, log_id, contract_address, name, result) {
+		// Drop pre-existing events
+		await Client.query(EventQueries.deleteLogEvents(log_id));
+
+		// Insert the events again
 		let res = await Client.query(EventQueries.insertEvent(
 			log_id,
 			name,
@@ -124,6 +132,8 @@ class ContractController {
 			log.debug(`Could not add event per log ${log_id}`);
 			return;
 		}
+
+		this.stats.heartbeat_event_insert_count++;
 
 		// Add transfer events to a dedicated log
 		if (name === 'Transfer') {
@@ -243,7 +253,8 @@ class ContractController {
 					end_block = start_block + block_limit;
 
 					if (heartbeat_count++ % 20 === 0) {
-						log.info(`Heartbeat between blocks ${start_block} to ${end_block}`);
+						log.info(`Heartbeat between blocks ${start_block} to ${end_block}: ${this.stats.heartbeat_event_insert_count} events added`);
+						this.stats.heartbeat_event_insert_count = 0;
 					}
 
 					if (!result.rowCount) {

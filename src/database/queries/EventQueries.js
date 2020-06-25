@@ -26,6 +26,23 @@ class EventQueries {
 		}
 	}
 
+	// NOTE: This cascades deletions to event_transfer
+	static deleteLogEvents(
+		log_id
+	) {
+		return {
+			text: `
+				DELETE FROM
+					event
+				WHERE
+					log_id = $1;
+			`,
+			values: [
+				log_id
+			]
+		}
+	}
+
 	static insertEventTransfer(
 		event_id,
 		contract_address,
