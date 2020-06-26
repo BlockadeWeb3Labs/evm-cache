@@ -96,8 +96,7 @@ class ContractIdentifier {
 				if (code_results.length === 1) {
 					standard = code_results[0];
 				} else if (code_results.length > 1) {
-					log.error(`Ambiguous code analysis result for ${address}, returned ${code_results}`);
-					return false;
+					log.error(`Ambiguous code analysis result for ${address}, returned ${code_results}. Attempt to determine standard by call.`);
 				}
 
 				// Failing? Try to guess the standard by calling the contract
