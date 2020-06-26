@@ -22,6 +22,7 @@ CREATE TABLE event_transfer (
 	"value"             NUMERIC
 );
 
+CREATE INDEX event_transfer_event_id_idx ON "event_transfer" ("event_id");
 CREATE INDEX event_transfer_from_idx ON "event_transfer" ("from");
 CREATE INDEX event_transfer_to_idx ON "event_transfer" ("to");
 CREATE INDEX event_transfer_contract_address_idx ON "event_transfer" ("contract_address");
