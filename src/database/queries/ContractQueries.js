@@ -121,7 +121,8 @@ class ContractQueries {
 		standard,
 		abi,
 		name,
-		symbol
+		symbol,
+		custom_name
 	) {
 		return {
 			text: `
@@ -131,23 +132,46 @@ class ContractQueries {
 						standard,
 						abi,
 						name,
-						symbol
+						symbol,
+						custom_name
 					)
 				VALUES (
-					$1, $2, $3, $4, $5
+					$1, $2, $3, $4, $5, $6
 				)
 				ON CONFLICT (address) DO UPDATE SET
-					standard = CASE WHEN EXCLUDED.standard IS NOT NULL THEN EXCLUDED.standard ELSE contract_meta.standard END,
-					abi      = CASE WHEN EXCLUDED.abi      IS NOT NULL THEN EXCLUDED.abi      ELSE contract_meta.abi      END,
-					name     = CASE WHEN EXCLUDED.name     IS NOT NULL THEN EXCLUDED.name     ELSE contract_meta.name     END,
-					symbol   = CASE WHEN EXCLUDED.symbol   IS NOT NULL THEN EXCLUDED.symbol   ELSE contract_meta.symbol   END;
+					standard    = CASE WHEN EXCLUDED.standard    IS NOT NULL THEN EXCLUDED.standard    ELSE contract_meta.standard   END,
+					abi         = CASE WHEN EXCLUDED.abi         IS NOT NULL THEN EXCLUDED.abi         ELSE contract_meta.abi        END,
+					name        = CASE WHEN EXCLUDED.name        IS NOT NULL THEN EXCLUDED.name        ELSE contract_meta.name       END,
+					symbol      = CASE WHEN EXCLUDED.symbol      IS NOT NULL THEN EXCLUDED.symbol      ELSE contract_meta.symbol     END,
+					custom_name = CASE WHEN EXCLUDED.custom_name IS NOT NULL THEN EXCLUDED.custom_name ELSE contract_meta.custom_name END;
 			`,
 			values: [
 				hexToBytea(address),
 				standard,
 				abi,
 				name,
-				symbol
+				symbol,
+				custom_name
+			]
+		}
+	}
+
+	static updateContractCustomMeta(
+		address,
+		custom_name
+	) {
+		return {
+			text: `
+				UPDATE
+					contract_meta
+				SET
+					custom_name = CASE WHEN $2::text IS NOT NULL THEN $2::text ELSE contract_meta.custom_name END
+				WHERE
+					address = $1;
+			`,
+			values: [
+				hexToBytea(address),
+				custom_name
 			]
 		}
 	}

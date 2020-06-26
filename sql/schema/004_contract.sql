@@ -13,5 +13,6 @@ CREATE TABLE contract_meta (
 	"standard"         CONTRACT_STANDARD_TYPE,
 	"abi"              JSONB,
 	"name"             TEXT,
-	"symbol"           TEXT
+	"symbol"           TEXT,
+	"custom_name"      TEXT -- Provided directly as an override
 );

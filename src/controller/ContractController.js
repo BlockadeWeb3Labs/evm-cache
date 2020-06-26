@@ -18,7 +18,19 @@ class ContractController {
 		};
 	}
 
-	setContractMetadata(address, abi = null, callback = ()=>{}) {
+	setContractCustom(address, custom_name, callback = ()=>{}) {
+		Database.connect((Client) => {
+			Client.query(ContractQueries.updateContractCustomMeta(
+				address,
+				custom_name || null
+			), (result) => {
+				Client.release();
+				callback();
+			});
+		});
+	}
+
+	setContractMetadata(address, abi = null, custom_name = null, callback = ()=>{}) {
 		const ci = new ContractIdentifier();
 		ci.determineStandard(address, (res) => {
 			if (!res.standard) {
@@ -44,7 +56,8 @@ class ContractController {
 							res.standard,
 							abi,
 							res.name || null,
-							res.symbol || null
+							res.symbol || null,
+							custom_name || null
 						), (result) => {
 							Client.release();
 							callback();
