@@ -331,29 +331,27 @@ class ContractController {
 			}
 
 			async function getMostRecentContractLog(meta) {
-				//Client.query(TransactionQueries.getMaxLogForContract(address), async (result) => {
-					let start_log,
-						end_log;
+				let start_log,
+					end_log;
 
-					// Start at the beginning
-					start_log = 1;
+				// Start at the beginning
+				start_log = 1;
 
-					// If we have an override
-					if (start_override && parseInt(start_override, 10) >= 0) {
-						start_log = parseInt(start_override, 10);
-					}
+				// If we have an override
+				if (start_override && parseInt(start_override, 10) >= 0) {
+					start_log = parseInt(start_override, 10);
+				}
 
-					end_log = start_log + log_limit;
+				end_log = start_log + log_limit;
 
-					// Get the lowest Log ID for this block
-					let res = await Client.query(TransactionQueries.getBlockNumberForTransactionLog(start_log));
-					let block_number = (res && res.rowCount && res.rows[0].number) || -1;
+				// Get the lowest Log ID for this block
+				let res = await Client.query(TransactionQueries.getBlockNumberForTransactionLog(start_log));
+				let block_number = (res && res.rowCount && res.rows[0].number) || -1;
 
-					log.info(`Starting contract backfill on block ${block_number} at log ${start_log}`);
-					this.stats.heartbeat_event_insert_time = Date.now()/1000;
+				log.info(`Starting contract backfill on block ${block_number} at log ${start_log}`);
+				this.stats.heartbeat_event_insert_time = Date.now()/1000;
 
-					backfill.call(this, address, start_log, end_log);
-				//});
+				backfill.call(this, address, start_log, end_log);
 			};
 
 			let heartbeat_count = 0;
