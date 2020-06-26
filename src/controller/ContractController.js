@@ -37,7 +37,7 @@ class ContractController {
 				if (abi && typeof abi === 'string' && abi.length > 0) {
 					log.info(`Using provided ABI for ${address}`);
 				} else {
-					log.info(`No standard determined for ${address}`);
+					log.info(`No standard determined for ${address}, and no ABI provided.`);
 					return;
 				}
 			}

@@ -108,7 +108,6 @@ class ContractIdentifier {
 						standard = call_results[0];
 					} else if (call_results.length > 1) {
 						log.error(`Ambiguous contract call analysis result for ${address}, returned ${call_results}`);
-						return false;
 					}
 				}
 
