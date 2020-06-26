@@ -331,7 +331,7 @@ class ContractController {
 			}
 
 			async function getMostRecentContractLog(meta) {
-				Client.query(TransactionQueries.getMaxLogForContract(address), async (result) => {
+				//Client.query(TransactionQueries.getMaxLogForContract(address), async (result) => {
 					let start_log,
 						end_log;
 
@@ -353,7 +353,7 @@ class ContractController {
 					this.stats.heartbeat_event_insert_time = Date.now()/1000;
 
 					backfill.call(this, address, start_log, end_log);
-				});
+				//});
 			};
 
 			let heartbeat_count = 0;
