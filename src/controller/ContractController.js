@@ -36,6 +36,13 @@ class ContractController {
 			if (!res.standard) {
 				if (abi && typeof abi === 'string' && abi.length > 0) {
 					log.info(`Using provided ABI for ${address}`);
+				} else if (
+					call_results.length === 2 &&
+					call_results.indexOf('erc20') !== -1 &&
+					call_results.indexOf('erc721') !== -1
+				) {
+					log.info(`Call results determined ERC-20 and ERC-721 for ${address}, assuming ERC-721.`);
+					res.standard = 'erc721';
 				} else {
 					log.info(`No standard determined for ${address}, and no ABI provided.`);
 					return;
