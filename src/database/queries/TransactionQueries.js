@@ -362,6 +362,17 @@ class TransactionQueries {
 			]
 		}
 	}
-}      
+
+	static getMaxLog() {
+		return {
+			text : `
+				SELECT
+					MAX(log_id)
+				FROM
+					log;
+			`
+		}
+	}
+}
 
 module.exports = TransactionQueries;

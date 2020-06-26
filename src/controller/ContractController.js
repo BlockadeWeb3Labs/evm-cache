@@ -298,7 +298,7 @@ class ContractController {
 		Database.connect(async (Client) => {
 
 			// Kick it off
-			Client.query(TransactionQueries.getMaxLogForContract(address), (result) => {
+			Client.query(TransactionQueries.getMaxLog(), (result) => {
 				if (!result.rowCount) {
 					log.error(`Unable to return max log`);
 					process.exit(1);
