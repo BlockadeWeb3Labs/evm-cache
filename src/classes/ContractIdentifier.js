@@ -12,65 +12,72 @@ class ContractIdentifier {
 		this.web3 = new Web3();
 	}
 
+	async getWeb3() {
+		let Client = await Database.connect();
+		let result = await Client.query(BlockchainQueries.getBlockchainsAndNodes());
+		Client.release();
+
+		if (!result || !result.rowCount) {
+			log.error('No blockchain nodes found in database.');
+			process.exit(1);
+		}
+
+		// ASSUMPTION: We're only going to watch one node at a time
+		// But the SQL is built to handle multiple nodes and blockchains.
+		// Regardless, one per at the moment
+		let node = result.rows[0];
+
+		// ASSUMPTION: We're only supporting Ethereum right now
+		// Create a new monitor instance
+		let ethClient = new EthereumClient({
+			"endpoint" : node.endpoint
+		});
+
+		return ethClient.web3;
+	}
+
 	async getNameSymbol(address, callback = ()=>{}) {
-		Database.connect((Client) => {
-			Client.query(BlockchainQueries.getBlockchainsAndNodes(), async (result) => {
-				if (!result || !result.rowCount) {
-					Client.release();
-					log.error('No blockchain nodes found in database.');
+		Database.connect(async (Client) => {
+			let web3 = await this.getWeb3();
+
+			Client.query(ContractQueries.getContractMeta(address), async (result) => {
+				Client.release();
+
+				if (!result || !result.rowCount || !result.rows[0].contract_meta_id) {
+					log.error(`No contract metadata found for ${address}`);
 					return callback({address});
 				}
 
-				// ASSUMPTION: We're only going to watch one node at a time
-				// But the SQL is built to handle multiple nodes and blockchains.
-				// Regardless, one per at the moment
-				let node = result.rows[0];
+				let abi, record = result.rows[0];
+				if (record.abi && typeof record.abi === 'object' && Object.keys(record.abi).length > 0) {
+					abi = record.abi;
+				} else if (typeof record.standard === 'string' && record.standard.length) {
+					abi = abiCfg.abis[record.standard];
+				} else {
+					// Nothing to use
+					log.debug("No valid ABI or standard provided to decode log.");
+					return callback({address});
+				}
 
-				// ASSUMPTION: We're only supporting Ethereum right now
-				// Create a new monitor instance
-				let ethClient = new EthereumClient({
-					"endpoint" : node.endpoint
-				});
+				// Determine if we have a name function
+				const contract = new web3.eth.Contract(abi, address);
+				let name, symbol;
+				try {
+					name = await contract.methods.name().call();
+				} catch (ex) {
+					log.error(`Could not retrieve name for ${address}`);
+				}
 
-				Client.query(ContractQueries.getContractMeta(address), async (result) => {
-					Client.release();
+				try {
+					symbol = await contract.methods.symbol().call();
+				} catch (ex) {
+					log.error(`Could not retrieve symbol for ${address}`);
+				}
 
-					if (!result || !result.rowCount || !result.rows[0].contract_meta_id) {
-						log.error(`No contract metadata found for ${address}`);
-						return callback({address});
-					}
-
-					let abi, record = result.rows[0];
-					if (record.abi && typeof record.abi === 'object' && Object.keys(record.abi).length > 0) {
-						abi = record.abi;
-					} else if (typeof record.standard === 'string' && record.standard.length) {
-						abi = abiCfg.abis[record.standard];
-					} else {
-						// Nothing to use
-						log.debug("No valid ABI or standard provided to decode log.");
-						return callback({address});
-					}
-
-					// Determine if we have a name function
-					const contract = new ethClient.web3.eth.Contract(abi, address);
-					let name, symbol;
-					try {
-						name = await contract.methods.name().call();
-					} catch (ex) {
-						log.error(`Could not retrieve name for ${address}`);
-					}
-
-					try {
-						symbol = await contract.methods.symbol().call();
-					} catch (ex) {
-						log.error(`Could not retrieve symbol for ${address}`);
-					}
-
-					callback({
-						address,
-						name,
-						symbol
-					});
+				callback({
+					address,
+					name,
+					symbol
 				});
 			});
 		});
@@ -81,12 +88,20 @@ class ContractIdentifier {
 			Client.query(ContractQueries.getContractCode(address), async (result) => {
 				Client.release();
 
+				let code;
 				if (!result.rowCount || !result.rows[0].input) {
-					log.error(`Address ${address} does not have contract creation transaction stored in the database.`);
-					return false;
-				}
+					log.info(`Address ${address} does not have contract creation transaction stored in the database.`);
 
-				let code = byteaBufferToHex(result.rows[0].input);
+					// Attempt to retrieve the code directly
+					let web3 = await this.getWeb3();
+					code = await web3.eth.getCode(address);
+					if (!code || code.length < 4) {
+						log.error(`Could not retrieve code from address. Exiting.`);
+						return false;
+					}
+				} else {
+					code = byteaBufferToHex(result.rows[0].input);
+				}
 
 				// Try to figure out the standard from the ABI
 				let code_results = this.determineStandardByCode(code, false);
@@ -188,25 +203,7 @@ class ContractIdentifier {
 	}
 
 	async determineStandardByCall(address, verbose = false) {
-		let Client = await Database.connect();
-		let result = await Client.query(BlockchainQueries.getBlockchainsAndNodes());
-		Client.release();
-
-		if (!result || !result.rowCount) {
-			log.error('No blockchain nodes found in database.');
-			return false;
-		}
-
-		// ASSUMPTION: We're only going to watch one node at a time
-		// But the SQL is built to handle multiple nodes and blockchains.
-		// Regardless, one per at the moment
-		let node = result.rows[0];
-
-		// ASSUMPTION: We're only supporting Ethereum right now
-		// Create a new monitor instance
-		let ethClient = new EthereumClient({
-			"endpoint" : node.endpoint
-		});
+		let web3 = await this.getWeb3();
 
 		// Keep track of potential matches
 		let matches = abiCfg.contracts.slice();
@@ -217,7 +214,7 @@ class ContractIdentifier {
 			const abi = abiCfg.abis[standard];
 
 			// Determine if we have a name function
-			const contract = new ethClient.web3.eth.Contract(abi, address);
+			const contract = new web3.eth.Contract(abi, address);
 
 			// Determine which callable functions we're reviewing
 			const callables = abiCfg.callableFunctions[standard];
