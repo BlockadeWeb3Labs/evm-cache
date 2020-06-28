@@ -95,19 +95,20 @@ class ContractQueries {
 		return {
 			text: `
 				SELECT
+					cm.*,
 					b.number AS created_block,
 					b.hash AS created_block_hash,
-					t.hash AS created_transaction_hash,
-					cm.*
+					t.hash AS created_transaction_hash
 				FROM
-					transaction t
-				JOIN
+					contract_meta cm
+				LEFT JOIN
+					transaction t ON
+						t.contract_address = cm.address
+				LEFT JOIN
 					block b ON
 						b.hash = t.block_hash
-				LEFT JOIN
-					contract_meta cm ON
-						cm.address = t.contract_address
 				WHERE
+					cm.address = $1 OR
 					t.contract_address = $1;
 			`,
 			values: [
