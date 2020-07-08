@@ -1,6 +1,14 @@
+-- View the value of a setting
+SHOW random_page_cost;
+SHOW enable_seqscan;
+SHOW max_parallel_workers_per_gather;
+
 -- assuming we're using SSD drives, reduce the cost of a random page estimate from 4 to 1
 -- which has postgres lean towards using indexes instead of sequential scans for large tables
 SET random_page_cost = 1;
+
+-- Set to 2 by default, modest improvement in some large queries (5 to 10%)
+SET max_parallel_workers_per_gather = 4;
 
 -- allow us to do sorts in RAM, this is a big fucking database
 SET work_mem TO '1 GB';
