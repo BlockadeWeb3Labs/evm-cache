@@ -29,3 +29,5 @@ CREATE INDEX event_transfer_contract_address_idx ON "event_transfer" ("contract_
 CREATE INDEX event_transfer_asset_idx ON "event_transfer" ("contract_address", "id");
 CREATE INDEX event_transfer_contract_to_idx ON "event_transfer" ("contract_address", "to");
 CREATE INDEX event_transfer_contract_from_idx ON "event_transfer" ("contract_address", "from");
+CREATE INDEX event_transfer_contract_id_to_idx ON "event_transfer" ("contract_address", "id", "to");
+CREATE INDEX event_transfer_contract_id_from_idx ON "event_transfer" ("contract_address", "id", "from");
