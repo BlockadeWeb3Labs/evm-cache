@@ -1,6 +1,8 @@
 CREATE TYPE BLOCKCHAIN_TYPE as ENUM(
-	'ethereum'
+	'ethereum',
+	'matic'
 );
+-- ALTER TYPE BLOCKCHAIN_TYPE ADD VALUE 'matic';
 
 CREATE TABLE blockchain (
 	"blockchain_id" BIGSERIAL PRIMARY KEY,

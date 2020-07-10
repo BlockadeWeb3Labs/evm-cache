@@ -20,9 +20,9 @@
   "homepage": "https://github.com/BlockadeLabs/evm-cache#readme",
   "dependencies": {
     "dotenv": "^8.2.0",
-    "evm-chain-monitor": "git+https://github.com/BlockadeLabs/evm-chain-monitor.git",
     "loglevel": "^1.6.8",
     "pg": "^8.2.1",
+    "web3": "^1.2.9",
     "yargs": "^15.3.1"
   },
   "devDependencies": {

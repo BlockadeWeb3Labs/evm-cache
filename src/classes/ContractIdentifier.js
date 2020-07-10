@@ -2,7 +2,7 @@ const log = require('loglevel');
 const Web3 = require('web3');
 const abiCfg = require('../config/abi.js');
 const Database = require('../database/Database.js');
-const EthereumClient = require('evm-chain-monitor').EthereumClient;
+const Web3Client = require('../classes/Web3Client.js');
 const BlockchainQueries = require('../database/queries/BlockchainQueries.js');
 const ContractQueries = require('../database/queries/ContractQueries.js');
 const byteaBufferToHex = require('../util/byteaBufferToHex.js');
@@ -29,11 +29,11 @@ class ContractIdentifier {
 
 		// ASSUMPTION: We're only supporting Ethereum right now
 		// Create a new monitor instance
-		let ethClient = new EthereumClient({
+		let evmClient = new Web3Client({
 			"endpoint" : node.endpoint
 		});
 
-		return ethClient.web3;
+		return evmClient.web3;
 	}
 
 	async getNameSymbol(address, callback = ()=>{}) {

@@ -2,7 +2,7 @@ const argv = require('yargs').argv;
 const log = require('loglevel');
 const Database = require(__dirname + '/../database/Database.js');
 const BlockchainQueries = require(__dirname + '/../database/queries/BlockchainQueries.js');
-const EthereumClient = require('evm-chain-monitor').EthereumClient;
+const Web3Client = require('/../classes/Web3Client.js');
 const DataVerifier = require(__dirname + '/../classes/DataVerifier.js');
 
 Database.connect((Client) => {
@@ -21,7 +21,7 @@ Database.connect((Client) => {
 
 		// ASSUMPTION: We're only supporting Ethereum right now
 		// Create a new monitor instance
-		let client = new EthereumClient({
+		let client = new Web3Client({
 			"endpoint" : node.endpoint
 		});
 
