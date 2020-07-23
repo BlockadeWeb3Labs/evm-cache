@@ -1,6 +1,6 @@
 const argv = require('yargs').argv;
 const log = require('loglevel');
-const db = require('../database/database.js');
+const db = require('../database/Database.js');
 const BlockchainQueries = require('../database/queries/BlockchainQueries.js');
 
 if (
