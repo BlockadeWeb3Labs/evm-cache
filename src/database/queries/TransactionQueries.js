@@ -152,7 +152,7 @@ class TransactionQueries {
 					transaction_hash = $1;
 			`,
 			values: [
-				transaction_hash
+				hexToBytea(transaction_hash)
 			]
 		}
 	}
