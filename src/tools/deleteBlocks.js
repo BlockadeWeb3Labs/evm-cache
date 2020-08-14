@@ -18,12 +18,16 @@ if (start_number === end_number || end_number <= 1) {
 	process.exit(1);
 }
 
-// Delete everything between them
 Database.connect(async (Client) => {
-	await Client.query(DeleteQueries.deleteOmmers(blockchain_id, start_number, end_number));
-	await Client.query(DeleteQueries.deleteLogsAndDependents(blockchain_id, start_number, end_number));
-	await Client.query(DeleteQueries.deleteTransactions(blockchain_id, start_number, end_number));
-	await Client.query(DeleteQueries.deleteBlocks(blockchain_id, start_number, end_number));
+	let BLOCKSIZE = 1;
+	for (let curr_end = end_number; curr_end >= start_number; curr_end -= BLOCKSIZE) {
+		let curr_start = Math.max(start_number, curr_end - BLOCKSIZE);
+		console.log("Sifting between blocks", curr_start, "and", curr_end, " --", ((end_number - curr_end) / (end_number - start_number))*100, "% Done" );
+		await Client.query(DeleteQueries.deleteOmmers(blockchain_id, curr_start, curr_end));
+		await Client.query(DeleteQueries.deleteLogsAndDependents(blockchain_id, curr_start, curr_end));
+		await Client.query(DeleteQueries.deleteTransactions(blockchain_id, curr_start, curr_end));
+		await Client.query(DeleteQueries.deleteBlocks(blockchain_id, curr_start, curr_end));
+	}
 	Client.release();
 	process.exit();
 });

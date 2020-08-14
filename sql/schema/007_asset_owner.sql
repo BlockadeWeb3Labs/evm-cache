@@ -131,3 +131,9 @@ CREATE TRIGGER t_update_asset_owner
 AFTER INSERT OR DELETE ON event_transfer
 FOR EACH ROW
 EXECUTE PROCEDURE f_update_asset_owner();
+
+-- To populate
+-- INSERT INTO asset_owner (contract_address, owner, id, value)
+-- SELECT contract_address, address as owner, id, SUM(COALESCE(input, 0) - COALESCE(output, 0)) AS value
+-- FROM event_transfer_owner
+-- GROUP BY contract_address, address, id;
