@@ -160,9 +160,22 @@ class CacheMonitor {
 
 			if (checkRes && checkRes.rowCount) {
 				if (block.transactions.length === parseInt(checkRes.rows[0].transaction_count, 10)) {
-					// Everything is in order, ignore and move on
-					if (callbacks.hasOwnProperty('blockAlreadyExists')) {
-						callbacks.blockAlreadyExists.call(this, block_number, block.hash);
+					// Block transactions are valid for this hash, but what about the number as a whole?
+					// This handles previous blocks at this height that have been uncled
+					let numCheckRes = await this.Client.query(BlockQueries.getBlockTransactionCount(
+						this.blockchain_id, block_number
+					));
+
+					if (numCheckRes && numCheckRes.rowCount && block.transactions.length === parseInt(numCheckRes.rows[0].count, 10)) {
+						// Everything is in order, ignore and move on
+						if (callbacks.hasOwnProperty('blockAlreadyExists')) {
+							callbacks.blockAlreadyExists.call(this, block_number, block.hash);
+						}
+					} else {
+						log.info(`At block #${block_number}, found stale transactions. Previous transaction count: ${numCheckRes.rows[0].count}, expected: ${block.transactions.length}`);
+
+						// There are stale blocks at this height, let's start fresh
+						storeBlockAssocData.call(this, block);
 					}
 				} else {
 					// Maybe delete any ommer that mentions this?
@@ -227,6 +240,19 @@ class CacheMonitor {
 
 			// Use a transaction for all of the promises
 			await this.Client.query('BEGIN;');
+
+			// Delete all associated data at this number prior to adding data
+			// We do this because some transactions are replaced by new transactions with
+			// the same nonce, but higher gas prices -- so they aren't replaced automatically
+			await this.Client.query(TransactionQueries.deleteLogs(
+				this.blockchain_id,
+				block.number
+			));
+
+			await this.Client.query(TransactionQueries.deleteTransactions(
+				this.blockchain_id,
+				block.number
+			));
 
 			// Insert any ommers
 			if (block.uncles && block.uncles.length) {

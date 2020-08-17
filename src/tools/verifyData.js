@@ -2,7 +2,7 @@ const argv = require('yargs').argv;
 const log = require('loglevel');
 const Database = require(__dirname + '/../database/Database.js');
 const BlockchainQueries = require(__dirname + '/../database/queries/BlockchainQueries.js');
-const Web3Client = require('/../classes/Web3Client.js');
+const Web3Client = require(__dirname + '/../classes/Web3Client.js');
 const DataVerifier = require(__dirname + '/../classes/DataVerifier.js');
 
 Database.connect((Client) => {

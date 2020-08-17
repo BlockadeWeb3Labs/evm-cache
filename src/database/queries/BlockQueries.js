@@ -188,7 +188,7 @@ class BlockQueries {
 				DELETE FROM
 					ommer
 				WHERE
-					nibling_block_hash = (
+					nibling_block_hash IN (
 						SELECT
 							hash
 						FROM
@@ -196,8 +196,6 @@ class BlockQueries {
 						WHERE
 							blockchain_id = $1 AND
 							number = $2
-						LIMIT
-							1
 					);
 			`,
 			values: [

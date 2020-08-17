@@ -199,7 +199,7 @@ class TransactionQueries {
 				DELETE FROM
 					transaction
 				WHERE
-					block_hash = (
+					block_hash IN (
 						SELECT
 							hash
 						FROM
@@ -207,8 +207,6 @@ class TransactionQueries {
 						WHERE
 							blockchain_id = $1 AND
 							number = $2
-						LIMIT
-							1
 					);
 			`,
 			values: [
