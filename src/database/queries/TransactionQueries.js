@@ -94,6 +94,7 @@ class TransactionQueries {
 
 	static addLog(
 		transaction_hash,
+		block_number,
 		log_index,
 		address,
 		data,
@@ -107,6 +108,7 @@ class TransactionQueries {
 				INSERT INTO
 					log (
 						transaction_hash,
+						block_number,
 						log_index,
 						address,
 						data,
@@ -123,13 +125,15 @@ class TransactionQueries {
 					$5,
 					$6,
 					$7,
-					$8
+					$8,
+					$9
 				)
 				ON CONFLICT DO NOTHING
 				RETURNING log_id;
 			`,
 			values: [
 				hexToBytea(transaction_hash),
+				block_number,
 				log_index,
 				hexToBytea(address),
 				hexToBytea(data),

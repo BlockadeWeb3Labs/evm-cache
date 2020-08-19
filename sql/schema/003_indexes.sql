@@ -19,5 +19,6 @@ CREATE INDEX transaction_to_idx ON "transaction" ("to");
 CREATE INDEX transaction_contract_address_idx ON "transaction" ("contract_address");
 
 -- log indexes
+CREATE INDEX log_block_number_idx ON "log" ("block_number");
 CREATE INDEX log_transaction_hash_idx ON "log" ("transaction_hash");
 CREATE INDEX log_address_idx ON "log" ("address");

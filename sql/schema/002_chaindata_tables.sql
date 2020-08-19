@@ -50,6 +50,7 @@ CREATE TABLE transaction (
 CREATE TABLE log (
 	"log_id"           BIGSERIAL PRIMARY KEY,
 	"transaction_hash" BYTEA REFERENCES "transaction" (hash) NOT NULL,
+	"block_number"     BIGINT,
 	"log_index"        BIGINT,
 	"address"          BYTEA,
 	"data"             BYTEA,

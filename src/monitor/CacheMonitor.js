@@ -366,6 +366,7 @@ class CacheMonitor {
 		for (let idx = 0; idx < receipt.logs.length; idx++) {
 			let logResult = await this.Client.query(TransactionQueries.addLog(
 				transaction.hash,
+				receipt.logs[idx].blockNumber,
 				receipt.logs[idx].logIndex,
 				receipt.logs[idx].address,
 				receipt.logs[idx].data,
