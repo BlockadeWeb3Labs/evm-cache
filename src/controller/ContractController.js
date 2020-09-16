@@ -177,7 +177,7 @@ class ContractController {
 				result._to,
 				result._from,
 				result._id,
-				result._amount
+				result.hasOwnProperty('_amount') ? result._amount : result._value
 			));
 		} else if (name === 'TransferBatch') {
 			let event_id = res.rows[0].event_id;
@@ -189,9 +189,9 @@ class ContractController {
 					result._to,
 					result._from,
 					result._ids[idx],
-					result._amounts[idx]
+					result.hasOwnProperty('_amounts') ? result._amounts[idx] : result._values[idx]
 				));
-		    }
+			}
 		}
 	}
 
