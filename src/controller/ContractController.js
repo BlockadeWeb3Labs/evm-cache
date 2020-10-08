@@ -18,19 +18,55 @@ class ContractController {
 		};
 	}
 
-	setContractCustom(address, custom_name, callback = ()=>{}) {
-		Database.connect((Client) => {
-			Client.query(ContractQueries.updateContractCustomMeta(
-				address,
-				custom_name || null
-			), (result) => {
-				Client.release();
-				callback();
+	setContractCustom(address, custom_data, callback = ()=>{}) {
+		let custom_name = null,
+			token_uri_json_interface = null,
+			token_uri_json_interface_parameters = null,
+			custom_token_uri = null,
+			custom_token_uri_headers = null;
+		if (custom_data && typeof custom_data === 'object') {
+			if (custom_data.hasOwnProperty('custom_name')) {
+				custom_name = custom_data.custom_name;
+			}
+
+			if (custom_data.hasOwnProperty('token_uri_json_interface')) {
+				token_uri_json_interface = custom_data.token_uri_json_interface;
+			}
+
+			if (custom_data.hasOwnProperty('token_uri_json_interface_parameters')) {
+				token_uri_json_interface_parameters = custom_data.token_uri_json_interface_parameters;
+			}
+
+			if (custom_data.hasOwnProperty('custom_token_uri')) {
+				custom_token_uri = custom_data.custom_token_uri;
+			}
+
+			if (custom_data.hasOwnProperty('custom_token_uri_headers')) {
+				custom_token_uri_headers = custom_data.custom_token_uri_headers;
+			}
+		}
+
+		// Set the token URI for this standard
+		const ci = new ContractIdentifier();
+		ci.getNameSymbol(address, (res) => {
+			Database.connect((Client) => {
+				// Now allow setting custom data
+				Client.query(ContractQueries.updateContractCustomMeta(
+					address,
+					custom_name || null,
+					token_uri_json_interface || res.token_uri_json_interface || null,
+					token_uri_json_interface_parameters || null,
+					custom_token_uri || null,
+					custom_token_uri_headers || null
+				), (result) => {
+					Client.release();
+					callback();
+				});
 			});
 		});
 	}
 
-	setContractMetadata(address, abi = null, custom_name = null, callback = ()=>{}) {
+	setContractMetadata(address, abi = null, custom_data = null, callback = ()=>{}) {
 		const ci = new ContractIdentifier();
 		ci.determineStandard(address, (res) => {
 			if (!res.standard) {
@@ -56,6 +92,23 @@ class ContractController {
 					abi
 				), () => {
 
+					let custom_name = null,
+						custom_token_uri = null,
+						custom_token_uri_headers = null;
+					if (custom_data && typeof custom_data === 'object') {
+						if (custom_data.hasOwnProperty('custom_name')) {
+							custom_name = custom_data.custom_name;
+						}
+
+						if (custom_data.hasOwnProperty('custom_token_uri')) {
+							custom_token_uri = custom_data.custom_token_uri;
+						}
+
+						if (custom_data.hasOwnProperty('custom_token_uri_headers')) {
+							custom_token_uri_headers = custom_data.custom_token_uri_headers;
+						}
+					}
+
 					// Now get the name and symbol, if available
 					ci.getNameSymbol(address, (res) => {
 						Client.query(ContractQueries.upsertContractMeta(
@@ -64,7 +117,10 @@ class ContractController {
 							abi,
 							res.name || null,
 							res.symbol || null,
-							custom_name || null
+							custom_name || null,
+							res.token_uri_json_interface || null,
+							custom_token_uri || null,
+							custom_token_uri_headers || null
 						), (result) => {
 							Client.release();
 							callback();
@@ -195,123 +251,6 @@ class ContractController {
 		}
 	}
 
-	backfillContractLogsByBlocks(blockchain_id, address, block_limit, start_override, callback = ()=>{}) {
-		let latest_block_number = 0;
-
-		Database.connect(async (Client) => {
-
-			// Kick it off
-			Client.query(BlockQueries.getLatestBlock(blockchain_id), (result) => {
-				if (!result.rowCount) {
-					log.error(`Unable to return latest block`);
-					process.exit(1);
-				}
-
-				latest_block_number = parseInt(result.rows[0].number, 10);
-				log.info(`Latest block found: ${latest_block_number}`);
-
-				getContractMeta.call(this);
-			});
-
-			let contractMetaSet = false;
-			async function getContractMeta() {
-				Client.query(ContractQueries.getContractMeta(address), (result) => {
-					// No recent event found
-					if (!result.rowCount || !result.rows[0].contract_meta_id) {
-						if (contractMetaSet) {
-							Client.release();
-							console.error(`Trying to set contract standard multiple times for ${address}`);
-							process.exit(1);
-						}
-
-						// Need to add the contract
-						contractMetaSet = true;
-						this.setContractMetadata(address, null, getContractMeta.bind(this));
-					} else {
-						getMostRecentContractEvent.call(this, result.rows[0]);
-					}
-				});
-			}
-
-			async function getMostRecentContractEvent(meta) {
-				Client.query(EventQueries.getMostRecentContractEvent(address), async (result) => {
-					let start_block,
-						end_block;
-
-					// No recent event found
-					if (!result.rowCount) {
-						start_block = parseInt(meta.created_block, 10);
-					} else {
-						start_block = parseInt(result.rows[0].block_number, 10);
-					}
-
-					// If we have an override
-					if (start_override && parseInt(start_override, 10) >= 0) {
-						start_block = parseInt(start_override, 10);
-					}
-
-					end_block = start_block + block_limit;
-
-					log.info(`Starting contract backfill on block ${start_block}`);
-					this.stats.heartbeat_event_insert_time = Date.now()/1000;
-
-					backfill.call(this, address, start_block, end_block);
-				});
-			};
-
-			let heartbeat_count = 0;
-			async function backfill(address, start_block, end_block) {
-				Client.query(TransactionQueries.getTransactionLogsByContractInBlockRange(
-					address,
-					start_block,
-					end_block
-				), async (result) => {
-					if (start_block >= latest_block_number) {
-						log.info(`Reached end at block ${latest_block_number}: ${this.stats.heartbeat_event_insert_count} events added in ${(Date.now()/1000-this.stats.heartbeat_event_insert_time).toLocaleString(5)} seconds`);
-						Client.release();
-						return callback();
-					}
-
-					start_block = end_block;
-					end_block = start_block + block_limit;
-
-					if (heartbeat_count++ % 20 === 0) {
-						log.info(`Heartbeat between blocks ${start_block} to ${end_block}: ${this.stats.heartbeat_event_insert_count} events added in ${(Date.now()/1000-this.stats.heartbeat_event_insert_time).toLocaleString(5)} seconds -- at ${(start_block/latest_block_number*100).toLocaleString(2)}%`);
-						this.stats.heartbeat_event_insert_count = 0;
-						this.stats.heartbeat_event_insert_time = Date.now()/1000;
-					}
-
-					if (!result.rowCount) {
-						return backfill.call(this, address, start_block, end_block);
-					}
-
-					// Decode these logs
-					const lp = new LogParser();
-					let events = lp.decodeLogs(result.rows);
-
-					if (!events || !Object.keys(events).length) {
-						return backfill.call(this, address, start_block, end_block);
-					}
-
-					for (let log_id in events) {
-						if (!events.hasOwnProperty(log_id)) continue;
-
-						await this.insertEvent(
-							Client,
-							log_id,
-							events[log_id].contract_address,
-							events[log_id].name,
-							events[log_id].result
-						);
-					}
-
-					return backfill.call(this, address, start_block, end_block);
-
-				});
-			};
-		});
-	}
-
 	backfillContractLogsByLogs(blockchain_id, address, log_limit, start_override, callback = ()=>{}) {
 		let latest_log_number = 0;
 
@@ -343,7 +282,7 @@ class ContractController {
 
 						// Need to add the contract
 						contractMetaSet = true;
-						this.setContractMetadata(address, null, getContractMeta.bind(this));
+						this.setContractMetadata(address, null, null, getContractMeta.bind(this));
 					} else {
 						getMostRecentContractLog.call(this, result.rows[0]);
 					}

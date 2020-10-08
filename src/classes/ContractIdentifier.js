@@ -61,7 +61,7 @@ class ContractIdentifier {
 
 				// Determine if we have a name function
 				const contract = new web3.eth.Contract(abi, address);
-				let name, symbol;
+				let name, symbol, token_uri_json_interface;
 				try {
 					name = await contract.methods.name().call();
 				} catch (ex) {
@@ -74,13 +74,32 @@ class ContractIdentifier {
 					log.error(`Could not retrieve symbol for ${address}`);
 				}
 
+				try {
+					token_uri_json_interface = this.getTokenUriJsonInferface(abi);
+				} catch (ex) {
+					log.error(`Could not retrieve tokenUriJsonInferface for ${address}`);
+				}
+
 				callback({
 					address,
 					name,
-					symbol
+					symbol,
+					token_uri_json_interface
 				});
 			});
 		});
+	}
+
+	getTokenUriJsonInferface(abi) {
+		// Only check for valid URI methods
+		let validUriMethods = ['tokenURI', 'uri'];
+
+		// Find the part of the ABI we want
+		for (let idx = 0; idx < abi.length; idx++) {
+			if (abi[idx].type !== 'function') continue;
+			if (validUriMethods.indexOf(abi[idx].name) === -1) continue;
+			return abi[idx];
+		}
 	}
 
 	async determineStandard(address, callback = ()=>{}) {

@@ -9,8 +9,12 @@ if (!argv.hasOwnProperty('address')) {
 }
 
 (async (address, abi = null, name = null) => {
+	let data = {
+		'custom_name' : name
+	};
+
 	const cc = new ContractController();
-	cc.setContractMetadata(address, abi, name, () => {
+	cc.setContractMetadata(address, abi, data, () => {
 		console.log("Done.");
 		process.exit();
 	});
