@@ -238,87 +238,92 @@ class ContractController {
 	}
 
 	async handleMetadata(Client, address, id) {
-		// Convert address if it's a buffer
-		address = byteaBufferToHex(address);
+		try {
+			// Convert address if it's a buffer
+			address = byteaBufferToHex(address);
 
-		// Get the token URI information
-		let res = await Client.query(ContractQueries.getTokenUriInfo(address));
-		if (!res || !res.rowCount) {
-			return;
-		}
-
-		let tokenUriInfo = res.rows[0];
-
-		let tokenUri;
-		if (tokenUriInfo.custom_token_uri !== null) {
-			// Handle custom token URIs
-			tokenUri = tokenUriInfo.custom_token_uri;
-
-			// Determine if we need to parse it
-			// DO STUFF
-		} else if (tokenUriInfo.token_uri_json_interface !== null) {
-			// Handle JSON interface calls
-			let jsonInterface = tokenUriInfo.token_uri_json_interface,
-				parameters = [];
-
-			if (tokenUriInfo.token_uri_json_interface_parameters !== null) {
-				// Handle JSON interface with custom parameters
-
-			} else {
-				// Figure it out
-				if (
-					jsonInterface.name === 'tokenURI' ||
-					jsonInterface.name === 'uri'
-				) {
-					parameters.push(String(id));
-				}
+			// Get the token URI information
+			let res = await Client.query(ContractQueries.getTokenUriInfo(address));
+			if (!res || !res.rowCount) {
+				return;
 			}
 
-			// Encode
-			let transactionData = this.evmClient.web3.eth.abi.encodeFunctionCall(
-				jsonInterface, parameters
-			);
+			let tokenUriInfo = res.rows[0];
 
-			const unsignedTxObj = {
-				to:   address,
-				data: transactionData
-			};
+			let tokenUri;
+			if (tokenUriInfo.custom_token_uri !== null) {
+				// Handle custom token URIs
+				tokenUri = tokenUriInfo.custom_token_uri;
 
-			// Call
-			tokenUri = await this.evmClient.web3.eth.call(
-				unsignedTxObj
-			);
+				// Determine if we need to parse it
+				// DO STUFF
+			} else if (tokenUriInfo.token_uri_json_interface !== null) {
+				// Handle JSON interface calls
+				let jsonInterface = tokenUriInfo.token_uri_json_interface,
+					parameters = [];
 
-			// Convert result -- first remove the first 4 bytes32
-			tokenUri = '0x' + tokenUri.replace(/^0x/, '').slice(32 * 4);
-			tokenUri = this.evmClient.web3.utils.hexToAscii(tokenUri);
-		} else {
-			return;
-		}
+				if (tokenUriInfo.token_uri_json_interface_parameters !== null) {
+					// Handle JSON interface with custom parameters
 
-		// Clean the token URI
-		tokenUri = tokenUri.replace(/\0/g, '');
-		tokenUri = tokenUri.trim();
+				} else {
+					// Figure it out
+					if (
+						jsonInterface.name === 'tokenURI' ||
+						jsonInterface.name === 'uri'
+					) {
+						parameters.push(String(id));
+					}
+				}
 
-		// If this token URI contains the `{id}` parameter, use the ERC1155 standard
-		tokenUri = tokenUri.replace(/{id}/g, id.toString(16).toLowerCase().padStart(64, '0'));
+				// Encode
+				let transactionData = this.evmClient.web3.eth.abi.encodeFunctionCall(
+					jsonInterface, parameters
+				);
 
-		// If it's a valid URL, then call it
-		let metadata = null;
-		try {
-			// If this passes, it's valid
-			new URL(tokenUri);
+				const unsignedTxObj = {
+					to:   address,
+					data: transactionData
+				};
 
-			// Restrict to a short response time
-			let result = await axios.get(tokenUri, {timeout: 1000});
-			metadata = result && result.data;
+				// Call
+				tokenUri = await this.evmClient.web3.eth.call(
+					unsignedTxObj
+				);
+
+				// Convert result -- first remove the first 4 bytes32
+				tokenUri = '0x' + tokenUri.replace(/^0x/, '').slice(32 * 4);
+				tokenUri = this.evmClient.web3.utils.hexToAscii(tokenUri);
+			} else {
+				return;
+			}
+
+			// Clean the token URI
+			tokenUri = tokenUri.replace(/\0/g, '');
+			tokenUri = tokenUri.trim();
+
+			// If this token URI contains the `{id}` parameter, use the ERC1155 standard
+			tokenUri = tokenUri.replace(/{id}/g, parseInt(id, 10).toString(16).toLowerCase().padStart(64, '0'));
+
+			// If it's a valid URL, then call it
+			let metadata = null;
 			try {
-				metadata = JSON.stringify(metadata);
-			} catch (_) {}
-		} catch (_) {}
+				// If this passes, it's valid
+				new URL(tokenUri);
 
-		// Store the token URI
-		await Client.query(AssetMetadataQueries.upsertMetadata(address, id, tokenUri, metadata));
+				// Restrict to a short response time
+				let result = await axios.get(tokenUri, {timeout: 1000});
+				metadata = result && result.data;
+				try {
+					metadata = JSON.stringify(metadata);
+				} catch (_) {}
+			} catch (_) {}
+
+			// Store the token URI
+			await Client.query(AssetMetadataQueries.upsertMetadata(address, id, tokenUri, metadata));
+		} catch (ex) {
+			log.error("Unknown error in handleMetadata:");
+			log.error(ex);
+		}
 	}
 
 	backfillContractLogsByLogs(address, log_limit, start_override, callback = ()=>{}) {
