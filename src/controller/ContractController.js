@@ -300,6 +300,9 @@ class ContractController {
 		tokenUri = tokenUri.replace(/\0/g, '');
 		tokenUri = tokenUri.trim();
 
+		// If this token URI contains the `{id}` parameter, use the ERC1155 standard
+		tokenUri = tokenUri.replace(/{id}/g, id.toString(16).toLowerCase().padStart(64, '0'));
+
 		// If it's a valid URL, then call it
 		let metadata = null;
 		try {
@@ -307,8 +310,11 @@ class ContractController {
 			new URL(tokenUri);
 
 			// Restrict to a short response time
-			let result = await axios.get(url, {timeout: 1000});
+			let result = await axios.get(tokenUri, {timeout: 1000});
 			metadata = result && result.data;
+			try {
+				metadata = JSON.stringify(metadata);
+			} catch (_) {}
 		} catch (_) {}
 
 		// Store the token URI
