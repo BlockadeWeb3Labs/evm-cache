@@ -9,6 +9,10 @@ const abis = {
 	'erc1155' : JSON.parse(fs.readFileSync(__dirname + "/abi/v0/erc1155.json", 'utf8'))
 };
 
+const supplemental_abis = {
+	'erc1155-uri' : JSON.parse(fs.readFileSync(__dirname + "/abi/v0/erc1155-metadata-uri.json", 'utf8'))
+};
+
 let events = {
 	'erc20' : [
 		'Transfer',
@@ -92,6 +96,7 @@ function getEventJson(abi, event) {
 module.exports = {
 	contracts : Object.keys(abis),
 	abis,
+	supplemental_abis,
 	events,
 	functions,
 	callableFunctions,

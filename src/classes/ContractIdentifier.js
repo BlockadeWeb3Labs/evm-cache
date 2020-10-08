@@ -75,7 +75,7 @@ class ContractIdentifier {
 				}
 
 				try {
-					token_uri_json_interface = this.getTokenUriJsonInferface(abi);
+					token_uri_json_interface = await this.getTokenUriJsonInferface(address, contract, abi);
 				} catch (ex) {
 					log.error(`Could not retrieve tokenUriJsonInferface for ${address}`);
 				}
@@ -90,14 +90,40 @@ class ContractIdentifier {
 		});
 	}
 
-	getTokenUriJsonInferface(abi) {
+	async getTokenUriJsonInferface(address, contract, abi) {
+		// Get the code for analysis
+		let web3 = await this.getWeb3();
+		let code = await web3.eth.getCode(address);
+
+		// If we can't find it, then attempt to see if it follows the ERC1155 Metadata URI standard
+		let erc1155UriJson = abiCfg.supplemental_abis['erc1155-uri'];
+		let sig = web3.eth.abi.encodeFunctionSignature(erc1155UriJson);
+		sig = sig.slice(2).toLowerCase(); // Remove 0x and force lowercase jic
+
+		if (code.indexOf(sig) !== -1) {
+			log.info("Token URI JSON Interface found in ABI for ERC-1155");
+			return erc1155UriJson;;
+		}
+
+		try {
+			let res = await contract.methods.supportsInterface('0x0e89341c').call();
+			if (res === true) {
+				log.info("Token URI JSON Interface found in supportsInterface for ERC-1155");
+				return abi[idx];
+			}
+		} catch (ex) {
+			// Do nothing
+			log.info("Contract has no support for supportsInterface");
+		}
+
 		// Only check for valid URI methods
-		let validUriMethods = ['tokenURI', 'uri'];
+		let validUriMethods = ['tokenURI'];
 
 		// Find the part of the ABI we want
 		for (let idx = 0; idx < abi.length; idx++) {
 			if (abi[idx].type !== 'function') continue;
 			if (validUriMethods.indexOf(abi[idx].name) === -1) continue;
+			log.info("Token URI JSON Interface found in ABI for ERC-721");
 			return abi[idx];
 		}
 	}
