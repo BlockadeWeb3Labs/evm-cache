@@ -27,7 +27,7 @@ class AssetMetadataQueries {
 				hexToBytea(contract_address),
 				id,
 				token_uri,
-				metadata || ""
+				metadata || null
 			]
 		}
 	}

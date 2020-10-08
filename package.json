@@ -19,6 +19,7 @@
   },
   "homepage": "https://github.com/BlockadeLabs/evm-cache#readme",
   "dependencies": {
+    "axios": "^0.20.0",
     "dotenv": "^8.2.0",
     "loglevel": "^1.6.8",
     "pg": "^8.2.1",

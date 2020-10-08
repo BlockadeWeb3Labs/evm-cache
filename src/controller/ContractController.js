@@ -1,4 +1,5 @@
 const log = require('loglevel');
+const axios = require('axios');
 const Web3Client = require('../classes/Web3Client.js');
 const abiCfg = require('../config/abi.js');
 const Database = require('../database/Database.js');
@@ -265,7 +266,10 @@ class ContractController {
 
 			} else {
 				// Figure it out
-				if (jsonInterface.name === 'tokenURI') {
+				if (
+					jsonInterface.name === 'tokenURI' ||
+					jsonInterface.name === 'uri'
+				) {
 					parameters.push(String(id));
 				}
 			}
@@ -285,7 +289,8 @@ class ContractController {
 				unsignedTxObj
 			);
 
-			// Convert result
+			// Convert result -- first remove the first 4 bytes32
+			tokenUri = '0x' + tokenUri.replace(/^0x/, '').slice(32 * 4);
 			tokenUri = this.evmClient.web3.utils.hexToAscii(tokenUri);
 		} else {
 			return;
@@ -301,8 +306,9 @@ class ContractController {
 			// If this passes, it's valid
 			new URL(tokenUri);
 
-			// Now try to get the metadata
-			console.log("Found valid URL");
+			// Restrict to a short response time
+			let result = await axios.get(url, {timeout: 1000});
+			metadata = result && result.data;
 		} catch (_) {}
 
 		// Store the token URI
