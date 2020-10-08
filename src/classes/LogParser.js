@@ -11,26 +11,6 @@ class LogParser {
 		this.web3 = new Web3();
 	}
 
-	async decodeTransactionLogs(hash, callback = ()=>{}) {
-		Database.connect((Client) => {
-			Client.query(TransactionQueries.getTransactionLogs(hash), async (result) => {
-				Client.release();
-
-				if (!result.rowCount) {
-					log.debug(`Transaction ${hash} does not have logs stored in the database.`);
-					return false;
-				}
-
-				let events = this.decodeLogs(result.rows);
-
-				callback({
-					hash,
-					events
-				});
-			});
-		});
-	}
-
 	decodeLogs(txLogs) {
 		let decodedLogs = {};
 		for (let txLog of txLogs) {

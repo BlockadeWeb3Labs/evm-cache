@@ -1,5 +1,4 @@
 CREATE TABLE asset_metadata (
-	"asset_metadata_id" BIGSERIAL PRIMARY KEY,
 	"contract_address"  BYTEA NOT NULL,
 	"id"                NUMERIC DEFAULT NULL,
 	"token_uri"         TEXT DEFAULT NULL,

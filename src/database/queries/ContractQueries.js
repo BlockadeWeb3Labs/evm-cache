@@ -89,6 +89,27 @@ class ContractQueries {
 		}
 	}
 
+	static getTokenUriInfo(
+		address
+	) {
+		return {
+			text: `
+				SELECT
+					token_uri_json_interface,
+					token_uri_json_interface_parameters,
+					custom_token_uri,
+					custom_token_uri_headers
+				FROM
+					contract_meta
+				WHERE
+					address = $1;
+			`,
+			values: [
+				hexToBytea(address)
+			]
+		}
+	}
+
 	static getContractMeta(
 		address
 	) {

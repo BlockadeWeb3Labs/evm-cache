@@ -1,21 +1,24 @@
 const log = require('loglevel');
-const Web3 = require('web3');
+const Web3Client = require('../classes/Web3Client.js');
 const abiCfg = require('../config/abi.js');
 const Database = require('../database/Database.js');
+const BlockchainQueries = require('../database/queries/BlockchainQueries.js');
 const BlockQueries = require('../database/queries/BlockQueries.js');
 const TransactionQueries = require('../database/queries/TransactionQueries.js');
 const ContractQueries = require('../database/queries/ContractQueries.js');
 const EventQueries = require('../database/queries/EventQueries.js');
+const AssetMetadataQueries = require('../database/queries/AssetMetadataQueries.js');
 const byteaBufferToHex = require('../util/byteaBufferToHex.js');
 const ContractIdentifier = require('../classes/ContractIdentifier.js');
 const LogParser = require(__dirname + '/../classes/LogParser.js');
 
 class ContractController {
-	constructor() {
+	constructor(evmClient) {
 		this.stats = {
 			'heartbeat_event_insert_count' : 0,
 			'heartbeat_event_insert_time' : 0
 		};
+		this.evmClient = evmClient;
 	}
 
 	setContractCustom(address, custom_data, callback = ()=>{}) {
@@ -131,33 +134,6 @@ class ContractController {
 		});
 	}
 
-	setDecodedLogsByTransaction(transaction_hash, callback = ()=>{}) {
-		const lp = new LogParser();
-		lp.decodeTransactionLogs(transaction_hash, (events) => {
-			if (!events.events || !Object.keys(events.events).length) {
-				log.debug(`No events returned for transaction ${transaction_hash}`);
-				return;
-			}
-
-			Database.connect(async (Client) => {
-				for (let log_id in events.events) {
-					if (!events.events.hasOwnProperty(log_id)) continue;
-
-					await this.insertEvent(
-						Client,
-						log_id,
-						events.events[log_id].contract_address,
-						events.events[log_id].name,
-						events.events[log_id].result
-					);
-				}
-
-				Client.release();
-				callback();
-			});
-		});
-	}
-
 	async setDecodedLog(Client, log_id, logReceipt) {
 		let contractMetaRes = await Client.query(ContractQueries.getContractMeta(logReceipt.address));
 
@@ -224,6 +200,9 @@ class ContractController {
 				result.tokenId || result._tokenId,
 				result.value   || result._value
 			));
+
+			// Handle metadata
+			await this.handleMetadata(Client, contract_address, result.tokenId || result._tokenId);
 		} else if (name === 'TransferSingle') {
 			let event_id = res.rows[0].event_id;
 
@@ -235,6 +214,9 @@ class ContractController {
 				result._id,
 				result.hasOwnProperty('_amount') ? result._amount : result._value
 			));
+
+			// Handle metadata
+			await this.handleMetadata(Client, contract_address, result._id);
 		} else if (name === 'TransferBatch') {
 			let event_id = res.rows[0].event_id;
 
@@ -247,26 +229,120 @@ class ContractController {
 					result._ids[idx],
 					result.hasOwnProperty('_amounts') ? result._amounts[idx] : result._values[idx]
 				));
+
+				// Handle metadata
+				await this.handleMetadata(Client, contract_address, result._ids[idx]);
 			}
 		}
 	}
 
-	backfillContractLogsByLogs(blockchain_id, address, log_limit, start_override, callback = ()=>{}) {
+	async handleMetadata(Client, address, id) {
+		// Convert address if it's a buffer
+		address = byteaBufferToHex(address);
+
+		// Get the token URI information
+		let res = await Client.query(ContractQueries.getTokenUriInfo(address));
+		if (!res || !res.rowCount) {
+			return;
+		}
+
+		let tokenUriInfo = res.rows[0];
+
+		let tokenUri;
+		if (tokenUriInfo.custom_token_uri !== null) {
+			// Handle custom token URIs
+			tokenUri = tokenUriInfo.custom_token_uri;
+
+			// Determine if we need to parse it
+			// DO STUFF
+		} else if (tokenUriInfo.token_uri_json_interface !== null) {
+			// Handle JSON interface calls
+			let jsonInterface = tokenUriInfo.token_uri_json_interface,
+				parameters = [];
+
+			if (tokenUriInfo.token_uri_json_interface_parameters !== null) {
+				// Handle JSON interface with custom parameters
+
+			} else {
+				// Figure it out
+				if (jsonInterface.name === 'tokenURI') {
+					parameters.push(String(id));
+				}
+			}
+
+			// Encode
+			let transactionData = this.evmClient.web3.eth.abi.encodeFunctionCall(
+				jsonInterface, parameters
+			);
+
+			const unsignedTxObj = {
+				to:   address,
+				data: transactionData
+			};
+
+			// Call
+			tokenUri = await this.evmClient.web3.eth.call(
+				unsignedTxObj
+			);
+
+			// Convert result
+			tokenUri = this.evmClient.web3.utils.hexToAscii(tokenUri);
+		} else {
+			return;
+		}
+
+		// Clean the token URI
+		tokenUri = tokenUri.replace(/\0/g, '');
+		tokenUri = tokenUri.trim();
+
+		// If it's a valid URL, then call it
+		let metadata = null;
+		try {
+			// If this passes, it's valid
+			new URL(tokenUri);
+
+			// Now try to get the metadata
+			console.log("Found valid URL");
+		} catch (_) {}
+
+		// Store the token URI
+		await Client.query(AssetMetadataQueries.upsertMetadata(address, id, tokenUri, metadata));
+	}
+
+	backfillContractLogsByLogs(address, log_limit, start_override, callback = ()=>{}) {
 		let latest_log_number = 0;
 
 		Database.connect(async (Client) => {
 
 			// Kick it off
-			Client.query(TransactionQueries.getMaxLog(), (result) => {
-				if (!result.rowCount) {
-					log.error(`Unable to return max log`);
-					process.exit(1);
+			Client.query(BlockchainQueries.getBlockchainsAndNodes(), (result) => {
+				if (!result || !result.rowCount) {
+					log.error('No blockchain nodes found in database.');
+					process.exit();
 				}
 
-				latest_log_number = parseInt(result.rows[0].max, 10);
-				log.info(`Latest log ID found: ${latest_log_number}`);
+				// ASSUMPTION: We're only going to watch one node at a time
+				// But the SQL is built to handle multiple nodes and blockchains.
+				// Regardless, one per at the moment
+				let node = result.rows[0];
 
-				getContractMeta.call(this);
+				// ASSUMPTION: We're only supporting Ethereum right now
+				// Create a new monitor instance
+				this.evmClient = new Web3Client({
+					"endpoint" : node.endpoint
+				});
+
+				Client.query(TransactionQueries.getMaxLog(), (result) => {
+					if (!result.rowCount) {
+						log.error(`Unable to return max log`);
+						process.exit(1);
+					}
+
+					latest_log_number = parseInt(result.rows[0].max, 10);
+					log.info(`Latest log ID found: ${latest_log_number}`);
+
+					getContractMeta.call(this);
+				});
 			});
 
 			let contractMetaSet = false;

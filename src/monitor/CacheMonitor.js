@@ -21,7 +21,7 @@ class CacheMonitor {
 		this.comprehensiveReviewCounter = 0;
 		this.comprehensiveReviewCountMod = 250;
 
-		this.cc = new ContractController();
+		this.cc = new ContractController(this.evmClient);
 	}
 
 	async start() {
