@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "start": "node index.js",
-    "start-dev": "nodemon index.js",
+    "start": "concurrently --kill-others \"node index.js\" \"node metadata.js\"",
+    "start-dev": "concurrently --kill-others \"nodemon index.js\" \"nodemon metadata.js\"",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
@@ -19,7 +19,7 @@
   },
   "homepage": "https://github.com/BlockadeLabs/evm-cache#readme",
   "dependencies": {
-    "axios": "^0.20.0",
+    "axios": ">=0.21.1",
     "dotenv": "^8.2.0",
     "loglevel": "^1.6.8",
     "pg": "^8.2.1",
@@ -27,6 +27,7 @@
     "yargs": "^15.3.1"
   },
   "devDependencies": {
+    "concurrently": "^5.3.0",
     "nodemon": "^2.0.4"
   }
 }

@@ -203,7 +203,7 @@ class ContractController {
 			));
 
 			// Handle metadata
-			await this.handleMetadata(Client, contract_address, result.tokenId || result._tokenId);
+			await this.enqueueMetadataUpdate(Client, contract_address, result.tokenId || result._tokenId);
 		} else if (name === 'TransferSingle') {
 			let event_id = res.rows[0].event_id;
 
@@ -217,7 +217,7 @@ class ContractController {
 			));
 
 			// Handle metadata
-			await this.handleMetadata(Client, contract_address, result._id);
+			await this.enqueueMetadataUpdate(Client, contract_address, result._id);
 		} else if (name === 'TransferBatch') {
 			let event_id = res.rows[0].event_id;
 
@@ -232,9 +232,58 @@ class ContractController {
 				));
 
 				// Handle metadata
-				await this.handleMetadata(Client, contract_address, result._ids[idx]);
+				await this.enqueueMetadataUpdate(Client, contract_address, result._ids[idx]);
 			}
 		}
+	}
+
+	async enqueueMetadataUpdate(Client, address, id) {
+		try {
+			// Convert address if it's a buffer
+			address = byteaBufferToHex(address);
+
+			// Enqueue the request
+			await Client.query(AssetMetadataQueries.enqueueMetadataUpdate(address, id));
+		} catch (ex) {
+			log.error("Unknown error in enqueueMetadataUpdate:");
+			log.error(ex);
+		}
+	}
+
+	async iterateMetadataUpdates(limit = 50, callback = () => {}) {
+		Database.connect((Client) => {
+			// Now allow setting custom data
+			Client.query(AssetMetadataQueries.getAssetsNeedUpdates(
+				limit
+			), (result) => {
+
+				if (!result || result.rowCount === 0) {
+					Client.release();
+					return callback(0);
+				}
+
+				const numUpdates = result.rowCount;
+
+				let promises = [];
+
+				for (let idx = 0; idx < result.rows.length; idx++) {
+					let address = result.rows[idx].contract_address;
+					let id = result.rows[idx].id;
+
+					promises.push(
+						this.handleMetadata(Client, address, id)
+					);
+				}
+
+				Promise.all(promises).then(() => {
+					Client.release();
+					return callback(numUpdates);
+				}).catch(() => {
+					Client.release();
+					return callback(numUpdates);
+				});
+			});
+		});
 	}
 
 	async handleMetadata(Client, address, id) {
