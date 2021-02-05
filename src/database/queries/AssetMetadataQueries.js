@@ -59,6 +59,27 @@ class AssetMetadataQueries {
 		}
 	}
 
+	static clearMetadataUpdateFlag(
+		contract_address,
+		id
+	) {
+		return {
+			text: `
+				UPDATE
+					asset_metadata
+				SET
+					needs_update = FALSE
+				WHERE
+					contract_address = $1 AND
+					id = $2;
+			`,
+			values: [
+				hexToBytea(contract_address),
+				id
+			]
+		}
+	}
+
 	static getAssetsNeedUpdates(
 		limit = 50
 	) {

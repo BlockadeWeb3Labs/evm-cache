@@ -287,10 +287,10 @@ class ContractController {
 	}
 
 	async handleMetadata(Client, address, id) {
-		try {
-			// Convert address if it's a buffer
-			address = byteaBufferToHex(address);
+		// Convert address if it's a buffer
+		address = byteaBufferToHex(address);
 
+		try {
 			// Get the token URI information
 			let res = await Client.query(ContractQueries.getTokenUriInfo(address));
 			if (!res || !res.rowCount) {
@@ -372,6 +372,9 @@ class ContractController {
 		} catch (ex) {
 			log.error("Unknown error in handleMetadata:");
 			log.error(ex);
+
+			// Store the token URI
+			await Client.query(AssetMetadataQueries.clearMetadataUpdateFlag(address, id));
 		}
 	}
 
