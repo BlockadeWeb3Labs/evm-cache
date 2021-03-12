@@ -239,6 +239,10 @@ class ContractController {
 
 	async enqueueMetadataUpdate(Client, address, id) {
 		try {
+			if (!id || !address) {
+				return;
+			}
+
 			// Convert address if it's a buffer
 			address = byteaBufferToHex(address);
 
