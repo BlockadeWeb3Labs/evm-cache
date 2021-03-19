@@ -80,6 +80,24 @@ class AssetMetadataQueries {
 		}
 	}
 
+	static requireMetadataUpdateFlagAcrossContract(
+		contract_address
+	) {
+		return {
+			text: `
+				UPDATE
+					asset_metadata
+				SET
+					needs_update = TRUE
+				WHERE
+					contract_address = $1;
+			`,
+			values: [
+				hexToBytea(contract_address)
+			]
+		}
+	}
+
 	static getAssetsNeedUpdates(
 		limit = 50
 	) {

@@ -254,6 +254,27 @@ class ContractController {
 		}
 	}
 
+	enqueueAllContractTokenMetadata(address, callback = () => {}) {
+		Database.connect(async (Client) => {
+			try {
+				if (!address) {
+					return;
+				}
+
+				// Convert address if it's a buffer
+				address = byteaBufferToHex(address);
+
+				// Enqueue the request
+				await Client.query(AssetMetadataQueries.requireMetadataUpdateFlagAcrossContract(address));
+			} catch (ex) {
+				log.error("Unknown error in enqueueAllContractTokenMetadata:");
+				log.error(ex);
+			}
+
+			callback();
+		});
+	}
+
 	async iterateMetadataUpdates(limit = 50, callback = () => {}) {
 		Database.connect((Client) => {
 			// Now allow setting custom data
