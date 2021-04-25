@@ -24,31 +24,39 @@ pool.connect((err, client, release) => {
 			process.exit();
 		}
 
-		// ASSUMPTION: We're only going to watch one node at a time
-		// But the SQL is built to handle multiple nodes and blockchains.
-		// Regardless, one per at the moment
-		let node = result.rows[0];
+		// Get all of the endpoint nodes for this blockchain
+		let nodeSetups = {};
+		for (let row of result.rows) {
+			if (!nodeSetups.hasOwnProperty(row.blockchain_id)) {
+				nodeSetups[row.blockchain_id] = [];
+			}
 
-		// ASSUMPTION: We're only supporting Ethereum right now
-		// Create a new monitor instance
-		let client = new Web3Client({
-			"endpoint" : node.endpoint
-		});
+			nodeSetups[row.blockchain_id].push(row.endpoint);
+		}
 
-		// Allow the user to set overrides
-		let startBlockOverride = argv.hasOwnProperty('start') && parseInt(argv.start, 10);
-		let endBlockOverride   = argv.hasOwnProperty('end')   && parseInt(argv.end, 10);
+		for (let blockchain_id in nodeSetups) {
+			// Create a new monitor instance
+			let client = new Web3Client({
+				"endpoints" : nodeSetups[blockchain_id]
+			});
 
-		// Start the monitor
-		let cm = new CacheMonitor({
-			blockchain_id : node.blockchain_id,
-			client,
-			startBlockOverride,
-			endBlockOverride
-		});
+			// Allow the user to set overrides
+			let startBlockOverride = argv.hasOwnProperty('start') && parseInt(argv.start, 10);
+			let endBlockOverride   = argv.hasOwnProperty('end')   && parseInt(argv.end, 10);
 
-		cm.start();
+			// Start the monitor
+			let cm = new CacheMonitor({
+				blockchain_id : blockchain_id,
+				client,
+				startBlockOverride,
+				endBlockOverride
+			});
 
-		log.debug("Started client monitor.");
+			cm.start();
+
+			log.debug(`Spun up client monitor for blockchain ID: ${blockchain_id}`);
+		}
+
+		log.debug("Started client monitors.");
 	});
 });

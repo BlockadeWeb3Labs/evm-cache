@@ -124,7 +124,6 @@ class CacheMonitor {
 					await sleep(2500);
 				}
 
-
 				// Try this block again
 				return this.mainLoop(parseInt(block_number, 10));
 			},
@@ -141,10 +140,42 @@ class CacheMonitor {
 	}
 
 	async getBlock(block_number, callbacks = {}) {
-		this.evmClient.getBlock(block_number, async (err, block) => {
+		// Lock and key to prevent multiple callback hell
+		let localErrorRecovered = false;
+
+		this.evmClient.getBlock(block_number, async (err, block, t1, t2, t3) => {
 			if (err) {
-				log.error("Error:", err);
-				process.exit(1);
+				// If we get an invalid JSON RPC response, the node is down, cycle to the next one
+				if (
+					String(err).indexOf('Invalid JSON RPC response') !== -1 ||
+					String(err).toUpperCase().indexOf('CONNECTION TIMEOUT') !== -1
+				) {
+					if (!localErrorRecovered) {
+						// Gate the cycle & mainloop from happening a second time
+						localErrorRecovered = true;
+
+						log.error("** JSON RPC or connection timeout failure in CacheMonitor::getBlock, cycling to next node **");
+
+						// Cycle to the next node...
+						this.evmClient.cycleNodes();
+
+						// And try again
+						return this.mainLoop(parseInt(block_number, 10));
+					} else {
+
+						// For debugging
+						log.error("** Received duplicate local timeout or JSON RPC error, already cycled **");
+
+						return;
+					}
+				} else {
+					// Print the error
+					log.error("Unknown error:", err);
+
+					// Sleep a bit before we fail out, because this can cause a death spiral of removing blocks
+					await sleep(2500);
+					process.exit(1);
+				}
 			} else if (!block) {
 				if (callbacks.hasOwnProperty('atBlockchainHead')) {
 					callbacks.atBlockchainHead.call(this, block_number);
@@ -276,11 +307,25 @@ class CacheMonitor {
 				// Rollback the transaction for all of the promises
 				await this.Client.query('ROLLBACK;');
 
+				/*
+				// If we get an invalid JSON RPC response, the node is down, cycle to the next one
+				if (
+					String(error).indexOf('Invalid JSON RPC response') !== -1 ||
+					String(error).toUpperCase().indexOf('CONNECTION TIMEOUT') !== -1
+				) {
+					log.error("** JSON RPC or connection timeout failure in CacheMonitor::storeBlockAssocData, cycling to next node **");
+
+					// Cycle to the next node...
+					this.evmClient.cycleNodes();
+
+					// And try again
+					return this.mainLoop(parseInt(block_number, 10));
+				}
+				*/
+
+				await sleep(1000);
 				log.error('Promises failed for retrieving all block data');
-				log.error('Error:');
-				log.error(error);
-				log.error('Error Message:');
-				log.error(error.message);
+				log.error(`Error: ${error}`);
 				process.exit(1);
 			});
 		}

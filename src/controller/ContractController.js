@@ -303,8 +303,19 @@ class ContractController {
 				Promise.all(promises).then(() => {
 					Client.release();
 					return callback(numUpdates);
-				}).catch(() => {
+				}).catch((ex) => {
 					Client.release();
+
+					if (
+						String(ex).indexOf('Invalid JSON RPC response') !== -1 ||
+						String(ex).toUpperCase().indexOf('CONNECTION TIMEOUT') !== -1
+					) {
+						log.error("** JSON RPC failure or connection timeout in ContractController::handleMetadata, cycling to next node **");
+
+						// Cycle to the next node...
+						this.evmClient.cycleNodes();
+					}
+
 					return callback(numUpdates);
 				});
 			});
@@ -395,8 +406,15 @@ class ContractController {
 			// Store the token URI
 			await Client.query(AssetMetadataQueries.upsertMetadata(address, id, tokenUri, metadata));
 		} catch (ex) {
-			log.error("Unknown error in handleMetadata:");
-			log.error(ex);
+			if (
+				String(ex).indexOf('Invalid JSON RPC response') !== -1 ||
+				String(ex).toUpperCase().indexOf('CONNECTION TIMEOUT') !== -1
+			) {
+				throw ex;
+			} else {
+				log.error("Unknown error in handleMetadata:");
+				log.error(ex);
+			}
 
 			// Store the token URI
 			await Client.query(AssetMetadataQueries.clearMetadataUpdateFlag(address, id));

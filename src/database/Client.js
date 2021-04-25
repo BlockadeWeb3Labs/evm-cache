@@ -4,7 +4,13 @@ const log = require('loglevel');
 class Client {
 	constructor(client, release) {
 		this.client = client;
-		this.release = release;
+		this.isReleased = false;
+		this.release = () => {
+			if (!this.isReleased) {
+				this.isReleased = true;
+				release();
+			}
+		};
 	}
 
 	async query(query, callback = null) {
@@ -22,10 +28,6 @@ class Client {
 		}
 
 		return this.client.query(query, queryCallback);
-	}
-
-	async release() {
-		this.release();
 	}
 }
 

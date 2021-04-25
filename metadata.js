@@ -19,30 +19,40 @@ Database.connect(async (Client) => {
 			process.exit();
 		}
 
-		// ASSUMPTION: We're only going to watch one node at a time
-		// But the SQL is built to handle multiple nodes and blockchains.
-		// Regardless, one per at the moment
-		let node = result.rows[0];
-
-		// ASSUMPTION: We're only supporting Ethereum right now
-		// Create a new monitor instance
-		const evmClient = new Web3Client({
-			"endpoint" : node.endpoint
-		});
-
-		// Now do the whole thing
-		const cc = new ContractController(evmClient);
-		cc.iterateMetadataUpdates(LIMIT, callback);
-
-		function callback(numUpdated) {
-			if (numUpdated > 0) {
-				console.log("More metadata to update:", numUpdated);
-				cc.iterateMetadataUpdates(LIMIT, callback);
-			} else {
-				console.log("No metadata to update, waiting...");
-				setTimeout(cc.iterateMetadataUpdates.bind(cc, LIMIT, callback), 5000);
+		// Get all of the endpoint nodes for this blockchain
+		let nodeSetups = {};
+		for (let row of result.rows) {
+			if (!nodeSetups.hasOwnProperty(row.blockchain_id)) {
+				nodeSetups[row.blockchain_id] = [];
 			}
+
+			nodeSetups[row.blockchain_id].push(row.endpoint);
 		}
+
+		for (let blockchain_id in nodeSetups) {
+			// Create a new monitor instance
+			const evmClient = new Web3Client({
+				"endpoints" : nodeSetups[blockchain_id]
+			});
+
+			// Now do the whole thing
+			const cc = new ContractController(evmClient);
+			cc.iterateMetadataUpdates(LIMIT, callback);
+
+			function callback(numUpdated) {
+				if (numUpdated > 0) {
+					console.log("More metadata to update:", numUpdated);
+					cc.iterateMetadataUpdates(LIMIT, callback);
+				} else {
+					console.log("No metadata to update, waiting...");
+					setTimeout(cc.iterateMetadataUpdates.bind(cc, LIMIT, callback), 5000);
+				}
+			}
+
+			log.debug(`Spun up metadata monitor for blockchain ID: ${blockchain_id}`);
+		}
+
+		log.debug("Started metadata monitors.");
 	});
 
 });
