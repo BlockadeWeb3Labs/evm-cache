@@ -16,8 +16,8 @@ class CacheMonitor {
 		this.endBlockOverride = options.endBlockOverride;
 		this.Client = null; // Covered in start()
 
-		this.reviewBlockLimit = 15;
-		this.comprehensiveReviewBlockLimit = 100;
+		this.reviewBlockLimit = 65;
+		this.comprehensiveReviewBlockLimit = 500;
 		this.comprehensiveReviewCounter = 0;
 		this.comprehensiveReviewCountMod = 250;
 
@@ -307,7 +307,6 @@ class CacheMonitor {
 				// Rollback the transaction for all of the promises
 				await this.Client.query('ROLLBACK;');
 
-				/*
 				// If we get an invalid JSON RPC response, the node is down, cycle to the next one
 				if (
 					String(error).indexOf('Invalid JSON RPC response') !== -1 ||
@@ -321,7 +320,6 @@ class CacheMonitor {
 					// And try again
 					return this.mainLoop(parseInt(block_number, 10));
 				}
-				*/
 
 				await sleep(1000);
 				log.error('Promises failed for retrieving all block data');

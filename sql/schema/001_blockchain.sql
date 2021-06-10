@@ -13,5 +13,8 @@ CREATE TABLE blockchain (
 CREATE TABLE blockchain_node (
 	"blockchain_node_id" BIGSERIAL PRIMARY KEY,
 	"blockchain_id"      BIGINT REFERENCES "blockchain" (blockchain_id) NOT NULL,
-	"endpoint"           TEXT NOT NULL
+	"endpoint"           TEXT NOT NULL,
+	"skip"               BOOLEAN DEFAULT FALSE
 );
+
+-- alter table blockchain_node add column skip boolean default false;

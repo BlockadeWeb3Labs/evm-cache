@@ -308,7 +308,8 @@ class ContractController {
 
 					if (
 						String(ex).indexOf('Invalid JSON RPC response') !== -1 ||
-						String(ex).toUpperCase().indexOf('CONNECTION TIMEOUT') !== -1
+						String(ex).toUpperCase().indexOf('CONNECTION TIMEOUT') !== -1 ||
+						String(ex).toLowerCase().indexOf('connection not open on send()') !== -1
 					) {
 						log.error("** JSON RPC failure or connection timeout in ContractController::handleMetadata, cycling to next node **");
 
@@ -408,7 +409,8 @@ class ContractController {
 		} catch (ex) {
 			if (
 				String(ex).indexOf('Invalid JSON RPC response') !== -1 ||
-				String(ex).toUpperCase().indexOf('CONNECTION TIMEOUT') !== -1
+				String(ex).toUpperCase().indexOf('CONNECTION TIMEOUT') !== -1 ||
+				String(ex).toLowerCase().indexOf('connection not open on send()') !== -1
 			) {
 				throw ex;
 			} else {

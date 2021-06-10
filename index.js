@@ -31,6 +31,11 @@ pool.connect((err, client, release) => {
 				nodeSetups[row.blockchain_id] = [];
 			}
 
+			if (row.hasOwnProperty('skip') && row.skip === true) {
+				console.log(`Skipping ${row.endpoint}`)
+				continue;
+			}
+
 			nodeSetups[row.blockchain_id].push(row.endpoint);
 		}
 
