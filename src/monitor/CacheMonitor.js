@@ -368,7 +368,7 @@ class CacheMonitor {
 		let receipts = await Promise.all(promises);
 
 		// Add all transactions at once
-		let result = await this.Client.query(TransactionQueries.addTransactions(
+		let results = await this.Client.query(TransactionQueries.addTransactions(
 			block_hash,
 			transactions,
 			receipts
@@ -383,11 +383,29 @@ class CacheMonitor {
 		await this.Client.query(TransactionQueries.deleteLogsByBlockHash(block_hash));
 
 		// Add the logs & any events
+		results = await this.Client.query(TransactionQueries.addLogs(
+			receipts
+		));
+
 		promises = [];
 		for (let receipt of receipts) {
-			promises.push(
-				this.addReceiptLogs(receipt)
-			);
+			for (let idx = 0; idx < receipt.logs.length; idx++) {
+				let matchingResult;
+				for (let row of results.rows) {
+					if (parseInt(row.log_index, 10) === receipt.logs[idx].logIndex) {
+						matchingResult = row;
+					}
+				}
+
+				if (!matchingResult) {
+					log.error("Could not find matching log index for log receipt");
+					continue;
+				}
+
+				promises.push(
+					this.cc.setDecodedLog(this.Client, matchingResult.log_id, receipt.logs[idx])
+				);
+			}
 		}
 
 		return Promise.all(promises);
@@ -403,27 +421,6 @@ class CacheMonitor {
 
 		return receipt;
 	}
-
-	async addReceiptLogs(receipt) {
-		for (let idx = 0; idx < receipt.logs.length; idx++) {
-			let logResult = await this.Client.query(TransactionQueries.addLog(
-				receipt.transactionHash,
-				receipt.logs[idx].blockNumber,
-				receipt.logs[idx].logIndex,
-				receipt.logs[idx].address,
-				receipt.logs[idx].data,
-				...receipt.logs[idx].topics
-			));
-
-			if (!logResult || !logResult.rowCount) {
-				log.error(`** Could not store log with index ${receipt.logs[idx].logIndex} for transaction ${receipt.transactionHash}`);
-				continue;
-			}
-
-			await this.cc.setDecodedLog(this.Client, logResult.rows[0].log_id, receipt.logs[idx]);
-		}
-	}
-
 
 
 

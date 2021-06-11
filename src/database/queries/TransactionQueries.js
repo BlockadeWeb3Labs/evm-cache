@@ -220,6 +220,54 @@ class TransactionQueries {
 		}
 	}
 
+	static addLogs(
+		receipts
+	) {
+		let values = [], numbers = [];
+
+		let number = 0;
+		for (let index in receipts) {
+			let receipt = receipts[index];
+			for (let idx = 0; idx < receipt.logs.length; idx++) {
+				values.push(
+					hexToBytea(receipt.transactionHash),
+					receipt.logs[idx].blockNumber,
+					receipt.logs[idx].logIndex,
+					hexToBytea(receipt.logs[idx].address),
+					hexToBytea(receipt.logs[idx].data),
+					hexToBytea(receipt.logs[idx].topics.length >= 1 ? receipt.logs[idx].topics[0] : null),
+					hexToBytea(receipt.logs[idx].topics.length >= 2 ? receipt.logs[idx].topics[1] : null),
+					hexToBytea(receipt.logs[idx].topics.length >= 3 ? receipt.logs[idx].topics[2] : null),
+					hexToBytea(receipt.logs[idx].topics.length >= 4 ? receipt.logs[idx].topics[3] : null)
+				);
+
+				numbers.push(`(\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number})`);
+			}
+		}
+
+		return {
+			text: `
+				INSERT INTO
+					log (
+						transaction_hash,
+						block_number,
+						log_index,
+						address,
+						data,
+						topic_0,
+						topic_1,
+						topic_2,
+						topic_3
+					)
+				VALUES ${numbers.join(',')}
+				ON CONFLICT DO NOTHING
+				RETURNING log_id, log_index;
+			`,
+			values: values
+		}
+	}
+
+
 	static deleteLogsByTransactionHash(
 		transaction_hash
 	) {
