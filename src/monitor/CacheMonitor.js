@@ -137,7 +137,7 @@ class CacheMonitor {
 				this.mainLoop(parseInt(block_number, 10) + 1);
 			},
 			'moveToNextBlock' : async (block_number) => {
-				console.log("mainLoop:", performance.now() - ml_a_perf, "ms");
+				log.debug("mainLoop:", performance.now() - ml_a_perf, "ms");
 
 				// Move to the next block
 				this.mainLoop(parseInt(block_number, 10) + 1);
@@ -306,7 +306,7 @@ class CacheMonitor {
 				// Commit the transaction for all of the promises
 				await this.Client.query('COMMIT;');
 
-				console.log("storeBlockAssocData:", performance.now() - st_a_perf, "ms");
+				log.debug("storeBlockAssocData:", performance.now() - st_a_perf, "ms");
 
 				if (callbacks.hasOwnProperty('moveToNextBlock')) {
 					callbacks.moveToNextBlock.call(this, block.number);
