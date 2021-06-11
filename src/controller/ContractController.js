@@ -135,6 +135,58 @@ class ContractController {
 		});
 	}
 
+	async setDecodedLogs(Client, logSets) {
+		let contractMetaRes = await Client.query(ContractQueries.getContractMetaForLogSets(logSets));
+
+		// Make sure we have a valid result set
+		if (!contractMetaRes || !contractMetaRes.rowCount) {
+			return;
+		}
+
+		let promises = [];
+		for (let set of logSets) {
+			for (let row of contractMetaRes.rows) {
+				if (set.logs.address.toLowerCase() === byteaBufferToHex(row.address).toLowerCase()) {
+					let contract_meta_id = row.contract_meta_id;
+
+					// If the contract meta record does not exist, move along
+					if (!contract_meta_id) {
+						continue;
+					}
+
+					// Decode these logs
+					const lp = new LogParser();
+					let events = lp.decodeLogs([{
+						...set.logs,
+						log_id     : set.log_id,
+						'standard' : row.standard,
+						'abi'      : row.abi
+					}]);
+
+					if (!events || !Object.keys(events).length) {
+						return;
+					}
+
+					log.info(`Found ${Object.keys(events).length} log events for ${set.logs.address}`);
+
+					for (let log_id in events) {
+						if (!events.hasOwnProperty(log_id)) continue;
+
+						promises.push(this.insertEvent(
+							Client,
+							log_id,
+							events[log_id].contract_address,
+							events[log_id].name,
+							events[log_id].result
+						));
+					}
+				}
+			}
+		}
+
+		return promises;
+	}
+
 	async setDecodedLog(Client, log_id, logReceipt) {
 		let contractMetaRes = await Client.query(ContractQueries.getContractMeta(logReceipt.address));
 

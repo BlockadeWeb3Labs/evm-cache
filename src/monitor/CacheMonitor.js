@@ -387,7 +387,7 @@ class CacheMonitor {
 			receipts
 		));
 
-		promises = [];
+		let logSets = [];
 		for (let receipt of receipts) {
 			for (let idx = 0; idx < receipt.logs.length; idx++) {
 				let matchingResult;
@@ -402,11 +402,14 @@ class CacheMonitor {
 					continue;
 				}
 
-				promises.push(
-					this.cc.setDecodedLog(this.Client, matchingResult.log_id, receipt.logs[idx])
-				);
+				logSets.push({
+					log_id : matchingResult.log_id,
+					logs : receipt.logs[idx]
+				});
 			}
 		}
+
+		promises = [this.cc.setDecodedLogs(this.Client, logSets)];
 
 		return Promise.all(promises);
 	}

@@ -138,6 +138,43 @@ class ContractQueries {
 		}
 	}
 
+	static getContractMetaForLogSets(
+		logSets
+	) {
+		let addresses = [];
+
+		for (let set of logSets) {
+			let address = hexToBytea(set.logs.address);
+			if (addresses.indexOf(address) === -1) {
+				addresses.push(address);
+			}
+		}
+
+		return {
+			text: `
+				SELECT
+					cm.*,
+					b.number AS created_block,
+					b.hash AS created_block_hash,
+					t.hash AS created_transaction_hash
+				FROM
+					contract_meta cm
+				LEFT JOIN
+					transaction t ON
+						t.contract_address = cm.address
+				LEFT JOIN
+					block b ON
+						b.hash = t.block_hash
+				WHERE
+					cm.address = ANY($1) OR
+					t.contract_address = ANY($1);
+			`,
+			values: [
+				addresses
+			]
+		}
+	}
+
 	static upsertContractMeta(
 		address,
 		standard,
