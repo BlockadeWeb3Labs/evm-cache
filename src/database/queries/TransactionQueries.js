@@ -92,6 +92,81 @@ class TransactionQueries {
 		}
 	}
 
+
+	static addTransactions(
+		block_hash,
+		transactions,
+		receipts
+	) {
+		let values = [], numbers = [];
+
+		let number = 0;
+		for (let index in transactions) {
+			let transaction = transactions[index];
+			let receipt = receipts[index];
+			values.push(
+				hexToBytea(block_hash),
+				hexToBytea(transaction.hash),
+				transaction.nonce,
+				transaction.transactionIndex,
+				hexToBytea(transaction.from),
+				hexToBytea(transaction.to),
+				transaction.value,
+				transaction.gasPrice,
+				transaction.gas,
+				hexToBytea(transaction.input),
+				receipt.status,
+				hexToBytea(receipt.contractAddress),
+				hexToBytea(transaction.v),
+				hexToBytea(transaction.r),
+				hexToBytea(transaction.s)
+			);
+			numbers.push(`(\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number})`);
+		}
+
+		return {
+			text: `
+				INSERT INTO
+					transaction (
+						block_hash,
+						hash,
+						nonce,
+						transaction_index,
+						"from",
+						"to",
+						value,
+						gas_price,
+						gas,
+						input,
+						status,
+						contract_address,
+						v,
+						r,
+						s
+					)
+				VALUES ${numbers.join(',')}
+				ON CONFLICT (hash) DO UPDATE SET
+					block_hash = EXCLUDED.block_hash,
+					nonce = EXCLUDED.nonce,
+					transaction_index = EXCLUDED.transaction_index,
+					"from" = EXCLUDED.from,
+					"to" = EXCLUDED.to,
+					value = EXCLUDED.value,
+					gas_price = EXCLUDED.gas_price,
+					gas = EXCLUDED.gas,
+					input = EXCLUDED.input,
+					status = EXCLUDED.status,
+					contract_address = EXCLUDED.contract_address,
+					v = EXCLUDED.v,
+					r = EXCLUDED.r,
+					s = EXCLUDED.s
+				RETURNING *;
+			`,
+			values: values
+		}
+	}
+
+
 	static addLog(
 		transaction_hash,
 		block_number,
@@ -157,6 +232,25 @@ class TransactionQueries {
 			`,
 			values: [
 				hexToBytea(transaction_hash)
+			]
+		}
+	}
+
+	static deleteLogsByBlockHash(
+		block_hash
+	) {
+		return {
+			text: `
+				DELETE FROM
+					log
+				USING
+					transaction
+				WHERE
+					transaction.hash = log.transaction_hash AND
+					transaction.block_hash = $1;
+			`,
+			values: [
+				hexToBytea(block_hash)
 			]
 		}
 	}

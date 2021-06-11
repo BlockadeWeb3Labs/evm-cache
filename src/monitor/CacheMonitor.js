@@ -8,6 +8,8 @@ const TransactionQueries = require('../database/queries/TransactionQueries.js');
 
 const ContractController = require('../controller/ContractController.js');
 
+const { performance } = require('perf_hooks');
+
 class CacheMonitor {
 	constructor(options) {
 		this.blockchain_id = options.blockchain_id;
@@ -84,6 +86,8 @@ class CacheMonitor {
 	}
 
 	async mainLoop(block_number) {
+		let ml_a_perf = performance.now();
+
 		if (this.endBlockOverride !== false && block_number >= this.endBlockOverride) {
 			log.info("Reached endBlockOverride:", this.endBlockOverride);
 			process.exit();
@@ -133,6 +137,8 @@ class CacheMonitor {
 				this.mainLoop(parseInt(block_number, 10) + 1);
 			},
 			'moveToNextBlock' : async (block_number) => {
+				console.log("mainLoop:", performance.now() - ml_a_perf, "ms");
+
 				// Move to the next block
 				this.mainLoop(parseInt(block_number, 10) + 1);
 			}
@@ -266,6 +272,8 @@ class CacheMonitor {
 		});
 
 		async function storeBlockAssocData(block) {
+			let st_a_perf = performance.now();
+
 			// Queue up all of the tasks
 			let promises = [];
 
@@ -290,13 +298,15 @@ class CacheMonitor {
 				promises.push(this.addOmmers(block.hash, block.uncles));
 			}
 
-			for (let idx = 0; idx < block.transactions.length; idx++) {
-				promises.push(this.getTransaction(block.hash, block.transactions[idx]));
+			if (block.transactions && block.transactions.length) {
+				promises.push(this.addTransactions(block.hash, block.transactions));
 			}
 
 			Promise.all(promises).then(async values => {
 				// Commit the transaction for all of the promises
 				await this.Client.query('COMMIT;');
+
+				console.log("storeBlockAssocData:", performance.now() - st_a_perf, "ms");
 
 				if (callbacks.hasOwnProperty('moveToNextBlock')) {
 					callbacks.moveToNextBlock.call(this, block.number);
@@ -345,7 +355,45 @@ class CacheMonitor {
 		return Promise.all(promises);
 	}
 
-	async getTransaction(block_hash, transaction) {
+	async addTransactions(block_hash, transactions) {
+		let promises = [];
+
+		// Get all receipts
+		for (let idx = 0; idx < transactions.length; idx++) {
+			promises.push(
+				this.getTransactionReceipt(block_hash, transactions[idx])
+			);
+		}
+
+		let receipts = await Promise.all(promises);
+
+		// Add all transactions at once
+		let result = await this.Client.query(TransactionQueries.addTransactions(
+			block_hash,
+			transactions,
+			receipts
+		));
+
+		// First we delete the logs in case we have to update them
+		// There's no easier way for us to identify logs that have to be "updated"
+		// based on the transaction being included in another block -- this changes
+		// the log_index, so it's better to just wipe the associated logs and re-insert
+		// ALSO, doing this will cascade all log row deletes to the associated event
+		// tables that we're using for parsed logs
+		await this.Client.query(TransactionQueries.deleteLogsByBlockHash(block_hash));
+
+		// Add the logs & any events
+		promises = [];
+		for (let receipt of receipts) {
+			promises.push(
+				this.addReceiptLogs(receipt)
+			);
+		}
+
+		return Promise.all(promises);
+	}
+
+	async getTransactionReceipt(block_hash, transaction) {
 		let receipt = await this.evmClient.getTransactionReceipt(transaction.hash);
 
 		if (!receipt) {
@@ -353,18 +401,43 @@ class CacheMonitor {
 			return;
 		}
 
-		// This is only for testing
-		// We don't actually need this for anything
-		/*
-			// Make sure that we haven't already stored this block
-			let checkRes = await this.Client.query(TransactionQueries.getTransactionByHash(
-				transaction.hash
+		return receipt;
+	}
+
+	async addReceiptLogs(receipt) {
+		for (let idx = 0; idx < receipt.logs.length; idx++) {
+			let logResult = await this.Client.query(TransactionQueries.addLog(
+				receipt.transactionHash,
+				receipt.logs[idx].blockNumber,
+				receipt.logs[idx].logIndex,
+				receipt.logs[idx].address,
+				receipt.logs[idx].data,
+				...receipt.logs[idx].topics
 			));
 
-			if (checkRes && checkRes.rowCount) {
-				log.info(`Found transaction already included in original block ${byteaBufferToHex(checkRes.rows[0].block_hash)}, moving to ${block_hash}`);
+			if (!logResult || !logResult.rowCount) {
+				log.error(`** Could not store log with index ${receipt.logs[idx].logIndex} for transaction ${receipt.transactionHash}`);
+				continue;
 			}
-		*/
+
+			await this.cc.setDecodedLog(this.Client, logResult.rows[0].log_id, receipt.logs[idx]);
+		}
+	}
+
+
+
+
+	/**
+	 * Old
+	 **/
+
+	async getTransaction(block_hash, transaction) {
+		let receipt = await this.evmClient.getTransactionReceipt(transaction.hash);
+
+		if (!receipt) {
+			log.info(`Transaction receipt not found for block. Dropping out to be re-inserted at a later iteration.\n\tBlock hash: ${block_hash}\n\tTX hash: ${transaction.hash}`);
+			return;
+		}
 
 		// Add the transaction
 		let result = await this.Client.query(TransactionQueries.addTransaction(
