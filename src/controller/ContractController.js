@@ -140,7 +140,7 @@ class ContractController {
 
 		// Make sure we have a valid result set
 		if (!contractMetaRes || !contractMetaRes.rowCount) {
-			return;
+			return [];
 		}
 
 		let promises = [];
@@ -164,7 +164,7 @@ class ContractController {
 					}]);
 
 					if (!events || !Object.keys(events).length) {
-						return;
+						continue;
 					}
 
 					log.info(`Found ${Object.keys(events).length} log events for ${set.logs.address}`);

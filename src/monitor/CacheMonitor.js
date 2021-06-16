@@ -19,7 +19,7 @@ class CacheMonitor {
 		this.Client = null; // Covered in start()
 
 		this.reviewBlockLimit = 65;
-		this.comprehensiveReviewBlockLimit = 500;
+		this.comprehensiveReviewBlockLimit = 200;
 		this.comprehensiveReviewCounter = 0;
 		this.comprehensiveReviewCountMod = 250;
 
