@@ -48,13 +48,19 @@ pool.connect((err, client, release) => {
 			// Allow the user to set overrides
 			let startBlockOverride = argv.hasOwnProperty('start') && parseInt(argv.start, 10);
 			let endBlockOverride   = argv.hasOwnProperty('end')   && parseInt(argv.end, 10);
+			let rewriteBlocks      = argv.hasOwnProperty('rewriteBlocks');
+
+			if (rewriteBlocks) {
+				log.info("Will be force-rewriting all blocks encountered.");
+			}
 
 			// Start the monitor
 			let cm = new CacheMonitor({
 				blockchain_id : blockchain_id,
 				client,
 				startBlockOverride,
-				endBlockOverride
+				endBlockOverride,
+				rewriteBlocks
 			});
 
 			cm.start();

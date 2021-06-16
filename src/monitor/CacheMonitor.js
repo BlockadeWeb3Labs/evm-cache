@@ -16,6 +16,7 @@ class CacheMonitor {
 		this.evmClient = options.client;
 		this.startBlockOverride = options.startBlockOverride;
 		this.endBlockOverride = options.endBlockOverride;
+		this.rewriteBlocks = options.rewriteBlocks === true;
 		this.Client = null; // Covered in start()
 
 		this.reviewBlockLimit = 65;
@@ -53,7 +54,7 @@ class CacheMonitor {
 		});
 	}
 
-	async flushBlock(block_number) {
+	async flushBlock(block_number, verbose = true) {
 		log.info("Flushing", block_number);
 
 		await this.Client.query(TransactionQueries.deleteLogs(
@@ -61,21 +62,27 @@ class CacheMonitor {
 			block_number
 		));
 
-		log.info("Logs deleted, cascading to events and related tables");
+		if (verbose) {
+			log.info("Logs deleted, cascading to events and related tables");
+		}
 
 		await this.Client.query(TransactionQueries.deleteTransactions(
 			this.blockchain_id,
 			block_number
 		));
 
-		log.info("Transactions deleted");
+		if (verbose) {
+			log.info("Transactions deleted");
+		}
 
 		await this.Client.query(BlockQueries.deleteOmmers(
 			this.blockchain_id,
 			block_number
 		));
 
-		log.info("Ommers deleted");
+		if (verbose) {
+			log.info("Ommers deleted");
+		}
 
 		await this.Client.query(BlockQueries.deleteBlock(
 			this.blockchain_id,
@@ -91,6 +98,10 @@ class CacheMonitor {
 		if (this.endBlockOverride !== false && block_number >= this.endBlockOverride) {
 			log.info("Reached endBlockOverride:", this.endBlockOverride);
 			process.exit();
+		}
+
+		if (this.rewriteBlocks === true) {
+			await this.flushBlock(block_number, false);
 		}
 
 		this.getBlock(block_number, {
