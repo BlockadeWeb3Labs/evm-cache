@@ -6,6 +6,7 @@ CREATE INDEX block_number_idx ON "block" ("number");
 CREATE INDEX block_hash_idx ON "block" ("hash");
 CREATE INDEX block_parent_hash_idx ON "block" ("parent_hash");
 CREATE INDEX block_miner_idx ON "block" ("miner");
+CREATE INDEX block_created_time_idx ON "block" ("created_time");
 
 -- ommer indexes
 CREATE INDEX ommer_hash_idx ON "ommer" ("hash");

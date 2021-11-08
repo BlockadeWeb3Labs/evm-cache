@@ -221,28 +221,26 @@ class TransactionQueries {
 	}
 
 	static addLogs(
-		receipts
+		logs
 	) {
 		let values = [], numbers = [];
 
 		let number = 0;
-		for (let index in receipts) {
-			let receipt = receipts[index];
-			for (let idx = 0; idx < receipt.logs.length; idx++) {
-				values.push(
-					hexToBytea(receipt.transactionHash),
-					receipt.logs[idx].blockNumber,
-					receipt.logs[idx].logIndex,
-					hexToBytea(receipt.logs[idx].address),
-					hexToBytea(receipt.logs[idx].data),
-					hexToBytea(receipt.logs[idx].topics.length >= 1 ? receipt.logs[idx].topics[0] : null),
-					hexToBytea(receipt.logs[idx].topics.length >= 2 ? receipt.logs[idx].topics[1] : null),
-					hexToBytea(receipt.logs[idx].topics.length >= 3 ? receipt.logs[idx].topics[2] : null),
-					hexToBytea(receipt.logs[idx].topics.length >= 4 ? receipt.logs[idx].topics[3] : null)
-				);
+		for (let idx = 0; idx < logs.length; idx++) {
+			let log = logs[idx];
+			values.push(
+				hexToBytea(log.transactionHash),
+				log.blockNumber,
+				log.logIndex,
+				hexToBytea(log.address),
+				hexToBytea(log.data),
+				hexToBytea(log.topics.length >= 1 ? log.topics[0] : null),
+				hexToBytea(log.topics.length >= 2 ? log.topics[1] : null),
+				hexToBytea(log.topics.length >= 3 ? log.topics[2] : null),
+				hexToBytea(log.topics.length >= 4 ? log.topics[3] : null)
+			);
 
-				numbers.push(`(\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number})`);
-			}
+			numbers.push(`(\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number},\$${++number})`);
 		}
 
 		return {

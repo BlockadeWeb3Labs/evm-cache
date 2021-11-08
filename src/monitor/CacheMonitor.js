@@ -393,17 +393,31 @@ class CacheMonitor {
 		// tables that we're using for parsed logs
 		await this.Client.query(TransactionQueries.deleteLogsByBlockHash(block_hash));
 
-		// Add the logs & any events
-		results = await this.Client.query(TransactionQueries.addLogs(
-			receipts
-		));
-
-		let logSets = [];
+		// Collect all of the logs
+		let logs = [];
 		for (let receipt of receipts) {
-			for (let idx = 0; idx < receipt.logs.length; idx++) {
+			for (let log of receipt.logs) {
+				log.transactionHash = receipt.transactionHash;
+				logs.push(log);
+			}
+		}
+
+		// Add the logs & any events
+		let logSets = [];
+		let LOG_SET_MAX_SIZE = 1000;
+		for (let chunkIdx = 0; chunkIdx < logs.length; chunkIdx += LOG_SET_MAX_SIZE) {
+
+			// Get the subset of the receipts
+			let localLogs = logs.slice(chunkIdx, Math.min(logs.length, chunkIdx + LOG_SET_MAX_SIZE));
+
+			results = await this.Client.query(TransactionQueries.addLogs(
+				localLogs
+			));
+
+			for (let idx = 0; idx < localLogs.length; idx++) {
 				let matchingResult;
 				for (let row of results.rows) {
-					if (parseInt(row.log_index, 10) === receipt.logs[idx].logIndex) {
+					if (parseInt(row.log_index, 10) === localLogs[idx].logIndex) {
 						matchingResult = row;
 					}
 				}
@@ -415,7 +429,7 @@ class CacheMonitor {
 
 				logSets.push({
 					log_id : matchingResult.log_id,
-					logs : receipt.logs[idx]
+					logs : localLogs[idx]
 				});
 			}
 		}
