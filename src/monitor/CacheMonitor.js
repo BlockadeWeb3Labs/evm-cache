@@ -391,7 +391,9 @@ class CacheMonitor {
 		// the log_index, so it's better to just wipe the associated logs and re-insert
 		// ALSO, doing this will cascade all log row deletes to the associated event
 		// tables that we're using for parsed logs
+		await this.Client.query('set enable_seqscan = off;');
 		await this.Client.query(TransactionQueries.deleteLogsByBlockHash(block_hash));
+		await this.Client.query('set enable_seqscan = on;');
 
 		// Collect all of the logs
 		let logs = [];
