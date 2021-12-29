@@ -382,8 +382,6 @@ class CacheMonitor {
 				promises.push(this.addTransactions(block.hash, block.transactions));
 			}
 
-			log.info(`Check: ${block.number}`);
-
 			try {
 				let values = await Promise.all(promises);
 
