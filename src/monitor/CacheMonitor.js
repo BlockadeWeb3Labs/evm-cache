@@ -106,7 +106,9 @@ class CacheMonitor {
 
 		this.getBlock(block_number, {
 			'atBlockchainHead' : async (block_number) => {
-				//log.debug("No block found:", block_number);
+
+				// Keep track of any changed blocks
+				let changedBlocks = [], waitingBlocks = 0;
 
 				// Go back and review the last N blocks
 				if (++this.comprehensiveReviewCounter % this.comprehensiveReviewCountMod === 0) {
@@ -123,24 +125,54 @@ class CacheMonitor {
 					// Wait before checking for the next block
 					await sleep(15000);
 				} else {
+
+					log.info(`Performing a routine review of the last ${this.reviewBlockLimit} blocks.`);
+
 					for (
 						let prior_block_number = block_number - this.reviewBlockLimit;
 						prior_block_number < block_number - 1;
 						prior_block_number++
 					) {
+						waitingBlocks++;
+
 						this.getBlock.call(this, prior_block_number, {
-							'foundDuringReviewBlock' : async (block_number, block_hash) => {
-								log.info(`* Found new previous block at number ${block_number}: ${block_hash}`);
+							'foundDuringReviewBlock' : async (reviewed_block_number, block_hash) => {
+								log.info(`* Found new previous block at number ${reviewed_block_number}: ${block_hash}`);
+							},
+							'blockReviewResponse' : async(reviewed_block_number, is_changed, callback = () => {}) => {
+								if (is_changed) {
+									log.info(`** Adding changed block ${reviewed_block_number}`);
+									changedBlocks.push({
+										block: reviewed_block_number,
+										callback: callback
+									});
+								}
+
+								// Reduce the number of blocks in waiting
+								waitingBlocks--;
+
+								log.info(`Remaining waiting blocks: ${waitingBlocks}`);
+
+								// If we've hit zero, return to main loop
+								if (waitingBlocks == 0) {
+									if (changedBlocks.length) {
+										changedBlocks.sort((a, b) => { if (a.block < b.block) return -1; return 1; })
+
+										log.info(`** Reviewing all changed blocks **`);
+
+										for (let pair of changedBlocks) {
+											log.info(`** Reviewing block ${pair.block}`);
+											await pair.callback();
+										}
+									}
+
+									// Try this block again
+									return this.mainLoop(parseInt(block_number, 10));
+								}
 							}
 						});
 					}
-
-					// Wait before checking for the next block
-					await sleep(2500);
 				}
-
-				// Try this block again
-				return this.mainLoop(parseInt(block_number, 10));
 			},
 			'blockAlreadyExists' : async (block_number, block_hash) => {
 				// Move to the next block
@@ -162,6 +194,11 @@ class CacheMonitor {
 
 		this.evmClient.getBlock(block_number, async (err, block, t1, t2, t3) => {
 			if (err) {
+				// Don't call back on errors
+				if (callbacks.hasOwnProperty('blockReviewResponse')) {
+					callbacks.blockReviewResponse.call(this, block_number, false);
+				}
+
 				// If we get an invalid JSON RPC response, the node is down, cycle to the next one
 				if (
 					String(err).indexOf('Invalid JSON RPC response') !== -1 ||
@@ -198,6 +235,11 @@ class CacheMonitor {
 					callbacks.atBlockchainHead.call(this, block_number);
 				}
 
+				// This is fine
+				if (callbacks.hasOwnProperty('blockReviewResponse')) {
+					callbacks.blockReviewResponse.call(this, block_number, false);
+				}
+
 				return;
 			}
 
@@ -207,6 +249,9 @@ class CacheMonitor {
 			));
 
 			if (checkRes && checkRes.rowCount) {
+				// Default, not a changed block, on review
+				let is_changed = false;
+
 				if (block.transactions.length === parseInt(checkRes.rows[0].transaction_count, 10)) {
 					// Block transactions are valid for this hash, but what about the number as a whole?
 					// This handles previous blocks at this height that have been uncled
@@ -222,8 +267,11 @@ class CacheMonitor {
 					} else {
 						log.info(`At block #${block_number}, found stale transactions. Previous transaction count: ${numCheckRes.rows[0].count}, expected: ${block.transactions.length}`);
 
+						// Stale
+						is_changed = true;
+
 						// There are stale blocks at this height, let's start fresh
-						storeBlockAssocData.call(this, block);
+						//storeBlockAssocData.call(this, block);
 					}
 				} else {
 					// Maybe delete any ommer that mentions this?
@@ -233,9 +281,17 @@ class CacheMonitor {
 					// reorgs beyond the regular number of blocks within a given timeframe
 					log.info(`At a re-instated block, #${block_number}, restoring data. Previous transaction count: ${checkRes.rows[0].transaction_count}, expected: ${block.transactions.length}`);
 
+					// Stale
+					is_changed = true;
+
 					// Go ahead and store all of the data all over again, which
 					// migrates any moved data back to the de-facto block
-					storeBlockAssocData.call(this, block);
+					//storeBlockAssocData.call(this, block);
+				}
+
+				// Need to come back to this
+				if (callbacks.hasOwnProperty('blockReviewResponse')) {
+					callbacks.blockReviewResponse.call(this, block_number, is_changed, storeBlockAssocData.bind(this, block));
 				}
 
 				// Stop here.
@@ -278,7 +334,12 @@ class CacheMonitor {
 					process.exit(1);
 				}
 
-				storeBlockAssocData.call(this, block);
+				// Need to come back to this
+				if (callbacks.hasOwnProperty('blockReviewResponse')) {
+					callbacks.blockReviewResponse.call(this, block_number, true, storeBlockAssocData.bind(this, block));
+				} else {
+					storeBlockAssocData.call(this, block);
+				}
 			});
 		});
 
@@ -313,7 +374,11 @@ class CacheMonitor {
 				promises.push(this.addTransactions(block.hash, block.transactions));
 			}
 
-			Promise.all(promises).then(async values => {
+			log.info(`Check: ${block.number}`);
+
+			try {
+				let values = await Promise.all(promises);
+
 				// Commit the transaction for all of the promises
 				await this.Client.query('COMMIT;');
 
@@ -324,7 +389,7 @@ class CacheMonitor {
 				}
 
 				return;
-			}).catch(async error => {
+			} catch (error) {
 				// Rollback the transaction for all of the promises
 				await this.Client.query('ROLLBACK;');
 
@@ -346,7 +411,7 @@ class CacheMonitor {
 				log.error('Promises failed for retrieving all block data');
 				log.error(`Error: ${error}`);
 				process.exit(1);
-			});
+			}
 		}
 	}
 
