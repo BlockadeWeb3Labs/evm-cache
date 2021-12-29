@@ -19,7 +19,7 @@ class CacheMonitor {
 		this.rewriteBlocks = options.rewriteBlocks === true;
 		this.Client = null; // Covered in start()
 
-		this.reviewBlockLimit = 65;
+		this.reviewBlockLimit = 100;
 		this.comprehensiveReviewBlockLimit = 200;
 		this.comprehensiveReviewCounter = 0;
 		this.comprehensiveReviewCountMod = 250;
@@ -111,6 +111,7 @@ class CacheMonitor {
 				let changedBlocks = [], waitingBlocks = 0;
 
 				// Go back and review the last N blocks
+				/*
 				if (++this.comprehensiveReviewCounter % this.comprehensiveReviewCountMod === 0) {
 					log.info(`Performing a comprehensive review of the last ${this.comprehensiveReviewBlockLimit} blocks.`);
 
@@ -125,6 +126,7 @@ class CacheMonitor {
 					// Wait before checking for the next block
 					await sleep(15000);
 				} else {
+				*/
 
 					log.info(`Performing a routine review of the last ${this.reviewBlockLimit} blocks.`);
 
@@ -151,7 +153,7 @@ class CacheMonitor {
 								// Reduce the number of blocks in waiting
 								waitingBlocks--;
 
-								log.info(`Remaining waiting blocks: ${waitingBlocks}`);
+								//log.info(`Remaining waiting blocks: ${waitingBlocks}`);
 
 								// If we've hit zero, return to main loop
 								if (waitingBlocks == 0) {
@@ -172,7 +174,10 @@ class CacheMonitor {
 							}
 						});
 					}
+
+				/*
 				}
+				*/
 			},
 			'blockAlreadyExists' : async (block_number, block_hash) => {
 				// Move to the next block
