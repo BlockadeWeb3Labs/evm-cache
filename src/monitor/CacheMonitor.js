@@ -166,6 +166,9 @@ class CacheMonitor {
 											log.info(`** Reviewing block ${pair.block}`);
 											await pair.callback();
 										}
+									} else {
+										// Wait before checking for the next block
+										await sleep(1200);
 									}
 
 									// Try this block again
