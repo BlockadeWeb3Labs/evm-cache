@@ -24,3 +24,6 @@ SET enable_seqscan TO off;
 
 -- set to 8 GB on rds already
 --SET effective_cache_size = '12 GB'
+
+-- permanently alter work_mem for a database user
+-- ALTER ROLE tx_queue_user SET work_mem TO '1GB';

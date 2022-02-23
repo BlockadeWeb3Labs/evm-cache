@@ -295,6 +295,9 @@ class CacheMonitor {
 					// Go ahead and store all of the data all over again, which
 					// migrates any moved data back to the de-facto block
 					//storeBlockAssocData.call(this, block);
+					if (!callbacks.hasOwnProperty('blockReviewResponse')) {
+						storeBlockAssocData.call(this, block);
+					}
 				}
 
 				// Need to come back to this
