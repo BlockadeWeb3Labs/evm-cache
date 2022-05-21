@@ -22,7 +22,12 @@ let config = {
 	"DB_HOST"            : process.env.DB_HOST,
 	"DB_NAME"            : process.env.DB_NAME,
 	"DB_USER"            : process.env.DB_USER,
-	"DB_PASS"            : process.env.DB_PASS
+	"DB_PASS"            : process.env.DB_PASS,
+
+	// Per-Network & Blockchain Settings
+	"REVIEW_BLOCK_LIMIT"               : process.env.REVIEW_BLOCK_LIMIT               ? parseInt(process.env.REVIEW_BLOCK_LIMIT, 10)               : 100,
+	"COMPREHENSIVE_REVIEW_BLOCK_LIMIT" : process.env.COMPREHENSIVE_REVIEW_BLOCK_LIMIT ? parseInt(process.env.COMPREHENSIVE_REVIEW_BLOCK_LIMIT, 10) : 200,
+	"BLOCK_HEAD_WAIT_TIME"             : process.env.BLOCK_HEAD_WAIT_TIME             ? parseInt(process.env.BLOCK_HEAD_WAIT_TIME, 10)             : 1200
 };
 
 module.exports = config;

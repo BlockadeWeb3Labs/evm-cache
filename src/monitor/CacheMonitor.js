@@ -1,4 +1,5 @@
 const log = require('loglevel');
+const config = require('../config/config.js');
 const Database = require('../database/Database.js');
 const sleep = require('../util/sleep.js');
 const byteaBufferToHex = require('../util/byteaBufferToHex.js');
@@ -19,8 +20,8 @@ class CacheMonitor {
 		this.rewriteBlocks = options.rewriteBlocks === true;
 		this.Client = null; // Covered in start()
 
-		this.reviewBlockLimit = 100;
-		this.comprehensiveReviewBlockLimit = 200;
+		this.reviewBlockLimit = config.REVIEW_BLOCK_LIMIT;
+		this.comprehensiveReviewBlockLimit = config.COMPREHENSIVE_REVIEW_BLOCK_LIMIT;
 		this.comprehensiveReviewCounter = 0;
 		this.comprehensiveReviewCountMod = 250;
 
@@ -168,7 +169,7 @@ class CacheMonitor {
 										}
 									} else {
 										// Wait before checking for the next block
-										await sleep(1200);
+										await sleep(config.BLOCK_HEAD_WAIT_TIME);
 									}
 
 									// Try this block again
