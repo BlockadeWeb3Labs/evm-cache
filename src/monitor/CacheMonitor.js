@@ -25,6 +25,9 @@ class CacheMonitor {
 		this.comprehensiveReviewCounter = 0;
 		this.comprehensiveReviewCountMod = 250;
 
+		this.timeoutID;
+		this.timeoutMs = 30000;
+
 		this.cc = new ContractController(this.evmClient);
 	}
 
@@ -95,6 +98,16 @@ class CacheMonitor {
 
 	async mainLoop(block_number) {
 		let ml_a_perf = performance.now();
+
+		// If we timeout, then kill the process
+		if (this.timeoutID) {
+			clearTimeout(this.timeoutID);
+		}
+		this.timeoutID = setTimeout(() => { log.error("-- Timeout reached, kill process --"); process.exit(1); }, this.timeoutMs);
+
+		// TODO -- wait to see this issue come up again
+		// Handle any stuck SQL calls here
+		//await this.killStuckSqlCalls();
 
 		if (this.endBlockOverride !== false && block_number >= this.endBlockOverride) {
 			log.info("Reached endBlockOverride:", this.endBlockOverride);
